@@ -82,43 +82,6 @@ class StandardScaler(Scaler):
         return (data * self.std) + self.mean
 
 
-class StandardScalerNew(Scaler):
-    """
-    Z-score归一化
-    x = (x - x.mean) / x.std
-    """
-
-    def __init__(self, data):
-        self.C = data.size(3)
-        self.means, self.stds = [], []
-        for i in range(self.C):
-            mean = data[..., i].mean()
-            std = data[..., i].std()
-            self.means.append(mean)
-            self.stds.append(std)
-            logging.info(f"feature {i} mean: {mean}, std: {std}")
-
-    def transform(self, data):
-        datas = []
-        for i in range(self.C):
-            # N L V
-            x = (data[..., i] - self.means[i]) / self.stds[i]
-            # N L V 1
-            x = x.unsqueeze(3)
-            datas.append(x)
-        return torch.cat(datas, dim=3)
-
-    def inverse_transform(self, data):
-        datas = []
-        for i in range(data.size(3)):
-            # N L V
-            x = (data[..., i] * self.stds[i]) + self.means[i]
-            # N L V 1
-            x = x.unsqueeze(3)
-            datas.append(x)
-        return torch.cat(datas, dim=3)
-
-
 class MinMax01Scaler(Scaler):
     """
     MinMax归一化 结果区间[0, 1]
@@ -175,9 +138,11 @@ class LogScaler(Scaler):
 
 
 def get_scaler(scaler, data: torch.Tensor):
+    if scaler == "MM11":
+        return MinMax11Scaler(data.min(), data.max())
+    if scaler == "MM01":
+        return MinMax01Scaler(data.min(), data.max())
     if scaler == "None":
         return NoneScaler()
-    if scaler == "StandardNew":
-        return StandardScalerNew(data)
     assert scaler == "Standard", "This scaler has not been implemented."
     return StandardScaler(torch.mean(data), torch.std(data))

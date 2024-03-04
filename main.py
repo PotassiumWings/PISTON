@@ -6,29 +6,26 @@ from datetime import datetime
 import numpy as np
 import torch
 
-from configs.arguments import TrainingArguments
+from configs.configs import TrainingArguments
 from dataset.processor import MyDataset
-from models.STGDL import STGDL
+from models.STD import STGDL
 from trainer import Trainer
 from utils.file_utils import ensure_dir
 
 
 def main(config: TrainingArguments):
     torch.autograd.set_detect_anomaly(True)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     time = datetime.strftime(datetime.now(), "%m%d_%H%M%S")
     setup(config, time)
 
     try:
         logging.info("Loading dataset...")
         dataset = MyDataset(config)
-        # 这里 supports 是接下来要被分解的 G，一般只有一个图，也即邻接矩阵
-        # 按理说不应该放在 dataset 这里，但要算 DTW 距离，就放这了
-        supports = dataset.supports
-        scaler = dataset.scaler
+        supports = [torch.Tensor(support).to(device) for support in dataset.supports]
 
         logging.info("Loading model...")
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        model = STGDL(config, supports, scaler, device).to(device)
+        model = STGDL(config, supports, dataset.scaler, device).to(device)
         print_parameter_count(model)
         trainer = Trainer(config, model, dataset, time)
 
@@ -43,9 +40,6 @@ def main(config: TrainingArguments):
         elif config.continue_training_epoch != -1:
             trainer.load(trainer.save_path)
             trainer.train(time, config.continue_training_epoch)
-
-        if config.save_graph:
-            trainer.visualize("subgraphs")
 
         trainer.test()
         print_parameter_count(model)

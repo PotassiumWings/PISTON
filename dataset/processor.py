@@ -1,12 +1,10 @@
-import logging
 import os
 import random
 
 import numpy as np
 import torch
-from fastdtw import fastdtw
 
-from configs.arguments import TrainingArguments
+from configs.configs import TrainingArguments
 from utils.normalize import get_scaler
 
 
@@ -25,37 +23,12 @@ class MyDataset(AbstractDataset):
         self.data_dir = os.path.join("data", self.config.dataset_name)
         self.batch_size = config.batch_size
 
-        self._load_data()
         self._load_adj()
+        # TODO: 根据邻接矩阵先把data变成稀疏的，方便scaler处理等
+        self._load_data()
 
     def _load_adj(self):
         adj_mx_filename = os.path.join(self.data_dir, "adj_mx.npz")
-        if not os.path.exists(adj_mx_filename):
-            num_node = self.config.num_nodes
-            data = self.train_data  # NLVC
-            data_mean = data.mean(axis=3)
-            data_mean = data_mean.mean(axis=0)
-            # if data_mean.shape[0] > 500:
-            #     data_mean = data_mean[:500, :]
-            data_mean = data_mean.squeeze().T
-            logging.info(f"Data mean shape: ({data_mean.shape})")
-            dtw_distance = np.zeros((num_node, num_node))
-            for i in range(num_node):
-                for j in range(i, num_node):
-                    dtw_distance[i][j] = fastdtw(data_mean[i], data_mean[j], radius=6)[0]
-                    # logging.info(f"{i} {j}: {dtw_distance[i][j]}")
-            for i in range(num_node):
-                for j in range(i):
-                    dtw_distance[i][j] = dtw_distance[j][i]
-
-            mean = np.mean(dtw_distance)
-            std = np.std(dtw_distance)
-            dist_matrix = (dtw_distance - mean) / std
-            sigma = self.config.sigma
-            dist_matrix = np.exp(-dist_matrix ** 2 / sigma ** 2)
-            dtw_matrix = np.zeros_like(dist_matrix)
-            dtw_matrix[dist_matrix > self.config.thres] = 1
-            np.savez_compressed(os.path.join(self.data_dir, "adj_mx.npz"), adj_mx=dtw_matrix)
         self.supports = [np.load(adj_mx_filename)["adj_mx"]]
 
     def _load_data(self):
@@ -70,8 +43,13 @@ class MyDataset(AbstractDataset):
         data = np.load(filename)
         x, y = data['x'], data['y']
         x = torch.Tensor(x)
+        # y: N L V V
         y = torch.Tensor(y)
-        y = y[:, :, :, :self.config.c_out]
+        y_inflow = y.sum(-2)
+        y_outflow = y.sum(-1)
+        # 2 N L V -> N 2 V L
+        y = torch.stack([y_inflow, y_outflow]).permute(1, 0, 3, 2)
+
         if define_scaler:
             self.scaler = get_scaler(self.config.scaler, x)
         x = self.scaler.transform(x)
@@ -81,8 +59,8 @@ class MyDataset(AbstractDataset):
 class MyDatasetIterator(object):
     def __init__(self, data, batch_size, device, shuffle):
         self.batch_size = batch_size
-        # x: (N, L, V, C)
-        # y: (N, L', V, C)
+        # x: (N, L, V, V)
+        # y: (N, L', V, V)
         self.x: torch.Tensor = data[0]
         self.y: torch.Tensor = data[1]
         self.N = self.x.size(0)
@@ -101,10 +79,8 @@ class MyDatasetIterator(object):
         self.index = 0
 
     def _to_tensor(self, indexes):
-        x = torch.FloatTensor([self.x[i].numpy() for i in indexes]).to(self.device)  # NLVC
-        y = torch.FloatTensor([self.y[i].numpy() for i in indexes]).to(self.device)  # NL'VC
-        x = x.permute(0, 3, 2, 1)  # NCVL
-        y = y.permute(0, 3, 2, 1)  # NCVL'
+        x = torch.FloatTensor([self.x[i].numpy() for i in indexes]).to(self.device)  # NLVV
+        y = torch.FloatTensor([self.y[i].numpy() for i in indexes]).to(self.device)  # NLVV
         return x, y
 
     def __next__(self):
