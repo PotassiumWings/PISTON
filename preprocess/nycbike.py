@@ -8,7 +8,7 @@ def get_timestamp(s):
 
 
 time_format = "%Y/%m/%d %H:%M"
-timestep = 60 * 60
+timestep = 30 * 60
 
 data = "../data/NYCBike/201404.csv"
 f = open(data, "r")
@@ -69,14 +69,29 @@ train = res[:train_index]
 val = res[train_index:val_index]
 test = res[val_index:]
 
-input_len = 48
+input_len = 32
 
 for name in ["train", "val", "test"]:
+    print(name)
     all_data = locals()[name]  # T V V -> N T' V V
     x = np.array([all_data[i:i + input_len] for i in range(len(all_data) - input_len - 1)])
     y = np.array([all_data[i + input_len:i + input_len + 1] for i in range(len(all_data) - input_len - 1)])
+    print(x.shape)
+    print(y.shape)
 
     np.savez_compressed(
         name + ".npz",
+        x=x, y=y
+    )
+
+    x = np.stack([x.sum(-2), x.sum(-1)])
+    x = x.transpose((1, 2, 3, 0))
+    y = np.stack([y.sum(-2), y.sum(-1)])
+    y = y.transpose((1, 2, 3, 0))
+    print(x.shape)
+    print(y.shape)
+
+    np.savez_compressed(
+        name + "1.npz",
         x=x, y=y
     )
