@@ -25,7 +25,7 @@ class TrainingArguments(BaseModel):
     scaler: str = Field("Standard")
 
     # for decomposing
-    p: int = Field(3)
+    p: int = Field(2)
     q: int = Field(3)
     node_emb: int = Field(10)
 
