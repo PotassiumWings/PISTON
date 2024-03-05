@@ -16,9 +16,11 @@ class STGDL(nn.Module):
         self.num_nodes = config.num_nodes
 
         self.std = STDecomposition(config, supports)
+        self.add_module(f"std", self.std)
+
         self.weights = nn.Parameter(torch.zeros(size=(self.std.total, 1, self.config.c_out,
-                                                      self.num_nodes, self.config.output_len)),
-                                    requires_grad=True)
+                                                      self.num_nodes, self.config.output_len)))
+        self.register_parameter(f"gather_weights", self.weights)
 
         self.loss_func = loss.masked_mae_loss(config.mae_mask)
 
@@ -31,3 +33,6 @@ class STGDL(nn.Module):
         for i in range(self.std.total):
             res += self.weights[i] * preds[i]
         return res
+
+    def calculate_loss(self, ys, preds):
+        return self.loss_func(preds, ys)

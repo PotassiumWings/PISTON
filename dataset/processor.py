@@ -4,7 +4,7 @@ import random
 import numpy as np
 import torch
 
-from configs.configs import TrainingArguments
+from configs.arguments import TrainingArguments
 from utils.normalize import get_scaler
 
 
@@ -28,8 +28,9 @@ class MyDataset(AbstractDataset):
         self._load_data()
 
     def _load_adj(self):
-        adj_mx_filename = os.path.join(self.data_dir, "adj_mx.npz")
-        self.supports = [np.load(adj_mx_filename)["adj_mx"]]
+        # adj_mx_filename = os.path.join(self.data_dir, "adj_mx.npz")
+        # self.supports = [np.load(adj_mx_filename)["adj_mx"]]
+        self.supports = [np.ones([self.config.num_nodes, self.config.num_nodes])]
 
     def _load_data(self):
         train_filename = os.path.join(self.data_dir, "train.npz")

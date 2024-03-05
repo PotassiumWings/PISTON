@@ -3,7 +3,7 @@ import sys
 import pydantic_argparse
 
 if __name__ == '__main__':
-    from configs.configs import TrainingArguments
+    from configs.arguments import TrainingArguments
     from main import main
 
 

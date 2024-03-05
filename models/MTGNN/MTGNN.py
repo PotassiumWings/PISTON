@@ -102,10 +102,6 @@ class MTGNN(AbstractSTEncoder):
                                     out_channels=self.config.c_out * self.config.output_len,
                                     kernel_size=(1, 1),
                                     bias=True)
-        self.end_conv_2_res = nn.Conv2d(in_channels=self.end_channels * self.config.output_len,
-                                        out_channels=self.config.c_in * self.config.input_len,
-                                        kernel_size=(1, 1),
-                                        bias=True)
         if self.seq_length > self.receptive_field:
             self.skip0 = nn.Conv2d(in_channels=self.in_dim, out_channels=self.skip_channels,
                                    kernel_size=(1, self.seq_length), bias=True)
@@ -164,7 +160,4 @@ class MTGNN(AbstractSTEncoder):
         # (batch_size, self.c_out * output_len, num_nodes, 1)
         pred = self.end_conv_2(x).permute(0, 2, 3, 1) \
             .reshape(-1, self.num_nodes, self.config.c_out, self.config.output_len).permute(0, 2, 1, 3)
-        # (batch_size, self.c_in * input_len, num_nodes, 1)
-        residual = self.end_conv_2_res(x).permute(0, 2, 3, 1) \
-            .reshape(-1, self.num_nodes, self.config.c_in, self.config.input_len).permute(0, 2, 1, 3)
-        return pred, residual
+        return pred

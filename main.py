@@ -6,7 +6,7 @@ from datetime import datetime
 import numpy as np
 import torch
 
-from configs.configs import TrainingArguments
+from configs.arguments import TrainingArguments
 from dataset.processor import MyDataset
 from models.STD import STGDL
 from trainer import Trainer

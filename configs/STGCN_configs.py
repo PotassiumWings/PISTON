@@ -17,3 +17,6 @@ class STGCNConfig(TrainingArguments):
     basic_block: str = Field("16, 8, 16")
     num_st_blocks: int = Field(-1)
     time_padding: int = Field(0)
+
+    num_heads: int = Field(4)
+    dropout: float = Field(0.2)

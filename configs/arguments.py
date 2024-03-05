@@ -2,9 +2,9 @@ from pydantic import BaseModel, Field
 
 
 class TrainingArguments(BaseModel):
-    dataset_name: str = Field("BikeNYC")
+    dataset_name: str = Field("NYCBike")
     # data feature
-    input_len: int = Field(24)  # Time step len
+    input_len: int = Field(48)  # Time step len
     output_len: int = Field(1)  # next step prediction, not changeable
     num_nodes: int = Field(330)
     c_in: int = Field(1)  # feature dim
@@ -25,8 +25,8 @@ class TrainingArguments(BaseModel):
     scaler: str = Field("Standard")
 
     # for decomposing
-    p: int = Field(4)
-    q: int = Field(4)
+    p: int = Field(3)
+    q: int = Field(3)
 
     seed: int = Field(0)
     load: str = Field("")

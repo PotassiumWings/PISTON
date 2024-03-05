@@ -19,3 +19,4 @@ class MTGNNConfig(TrainingArguments):
     subgraph_size: int = Field(20)
     node_dim: int = Field(40)
     tanhalpha: float = Field(3)
+    dropout: float = Field(0.2)

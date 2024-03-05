@@ -32,7 +32,6 @@ class STSSL(AbstractSTEncoder):
 
         # traffic flow prediction branch
         self.mlp = MLP(self.hidden_size, config.c_out)
-        self.mlp2 = FCLayer(self.output_len * self.hidden_size, config.input_len * config.c_in)
         # temporal heterogeneity modeling branch
         self.thm = TemporalHeteroModel(self.hidden_size, config.batch_size, self.num_nodes, self.device)
         # spatial heterogeneity modeling branch
@@ -58,9 +57,8 @@ class STSSL(AbstractSTEncoder):
                             self.spatial_loss(repr1, repr2) * (1 - self.temporal_part)
 
         pred = self.predict(repr1, repr2)
-        residual = self.residual(repr1)
 
-        return pred, residual
+        return pred
 
     def fetch_spatial_sim(self):
         """
@@ -80,17 +78,6 @@ class STSSL(AbstractSTEncoder):
         '''
         z1 = z1.permute(0, 3, 2, 1)  # NLVC -> NCVL
         return self.mlp(z1)
-
-    def residual(self, z):  # N Lo V Cm -> N Li V Ci
-        # N Lo V Cm -> N V LoCm -> N LoCm V
-        z = z.permute(0, 2, 1, 3).reshape(-1, self.num_nodes, self.output_len * self.hidden_size).permute(0, 2, 1)
-        # N LoCm V 1
-        z = z.unsqueeze(3)
-        # N LiCi V 1
-        z = self.mlp2(z)
-        # N LiCi V 1 -> N V LiCi 1 -> N V Ci Li -> N Ci V Li
-        z = z.permute(0, 2, 1, 3).reshape(-1, self.num_nodes, self.c_in, self.input_len).permute(0, 2, 1, 3)
-        return z
 
     def temporal_loss(self, z1, z2):
         return self.thm(z1, z2)

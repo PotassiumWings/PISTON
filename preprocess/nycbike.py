@@ -69,7 +69,7 @@ train = res[:train_index]
 val = res[train_index:val_index]
 test = res[val_index:]
 
-input_len = 24
+input_len = 48
 
 for name in ["train", "val", "test"]:
     all_data = locals()[name]  # T V V -> N T' V V

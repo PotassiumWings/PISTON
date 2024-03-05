@@ -8,3 +8,4 @@ class GraphWavenetConfig(TrainingArguments):
     layers: int = Field(3)
     hidden_size: int = Field(8)
     kernel_size: int = Field(2)
+    dropout: float = Field(0.2)

@@ -1,6 +1,12 @@
 import torch.nn as nn
 
+import logging
 from configs.arguments import TrainingArguments
+from configs.GraphWavenet_configs import GraphWavenetConfig
+from configs.MSDR_configs import MSDRConfig
+from configs.MTGNN_configs import MTGNNConfig
+from configs.STSSL_configs import STSSLConfig
+from configs.STGCN_configs import STGCNConfig
 from models.GraphWavenet.GraphWavenet import GraphWavenet
 from models.MSDR.MSDR import MSDR
 from models.MTGNN.MTGNN import MTGNN
@@ -10,14 +16,27 @@ from models.abstract_st_encoder import AbstractSTEncoder
 
 
 class MDBlock(nn.Module):
-    def __init__(self, config: TrainingArguments, supports: list, temporal_index, spatio_index):
+    def __init__(self, config: TrainingArguments, supports: list, temporal_index, spatio_index, st_encoder):
         super(MDBlock, self).__init__()
         self.conv: AbstractSTEncoder
 
-        for i in range(temporal_index):
+        if st_encoder == "STGCN":
+            config = STGCNConfig()
+        elif st_encoder == "GraphWavenet":
+            config = GraphWavenetConfig()
+        elif st_encoder == "MTGNN":
+            config = MTGNNConfig()
+        elif st_encoder == "STSSL":
+            config = STSSLConfig()
+        elif st_encoder == "MSDR":
+            config = MSDRConfig()
+
+        for i in range(min(temporal_index + 1, config.p - 1)):
             config.input_len //= 2
+        logging.info(f"\t{temporal_index} {spatio_index} input_len={config.input_len}")
         config.c_out = config.c_hid
         config.c_in *= 2
+        config.st_encoder = st_encoder
         # in:   N 2C_in V L()
         # out:  N C_hid V L_out
 
@@ -36,8 +55,8 @@ class MDBlock(nn.Module):
 
     def forward(self, x, subgraph):
         # x: (batch_size, c_in, num_nodes, input_len)
-        pred, residual = self.conv(x, subgraph)
-        return pred, residual
+        pred = self.conv(x, subgraph)
+        return pred
 
     def get_embedding(self):
         return self.conv.get_embedding()

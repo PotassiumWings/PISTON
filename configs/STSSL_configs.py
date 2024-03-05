@@ -9,3 +9,4 @@ class STSSLConfig(TrainingArguments):
     shm_temp: float = Field(0.5)
     aug_percent: float = Field(0.1)
     temporal_percent: float = Field(0.5)
+    dropout: float = Field(0.2)

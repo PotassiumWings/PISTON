@@ -196,6 +196,7 @@ class STEncoder(nn.Module):
         self.t_sim_mx = None
 
         out_len = input_length - 2 * (Kt - 1) * len(blocks)
+        assert out_len > 0, out_len
         self.out_conv = TemporalConvLayer(out_len, c[2], c[2], "GLU")
         self.ln3 = nn.LayerNorm([num_nodes, c[2]])
         self.dropout3 = nn.Dropout(droprate)
