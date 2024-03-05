@@ -56,13 +56,17 @@ class STDecomposition(Module):
         x = x.unsqueeze(1)
 
         wavelet = pywt.Wavelet("haar")
+        logging.info("wavedec start")
         x = ptwt.wavedec(x, wavelet, mode='zero', level=self.tk - 1)
+        logging.info("wavedec end")
         x = x[::-1]
 
         # x: [y1, y2, ..., ytk], y NCVVl
         res = []
         for i in range(self.tk):
+            logging.info("svd start")
             u, sig, v = torch.svd(x[i].permute(0, 1, 4, 2, 3))  # NClVV
+            logging.info("svd end")
             y = []
             for j in range(self.sk - 1):
                 ui, sigi, vi = u[..., j:j + 1], sig[..., j:j + 1], v[..., j:j + 1]
