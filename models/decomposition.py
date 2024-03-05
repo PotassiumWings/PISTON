@@ -26,11 +26,11 @@ class STDecomposition(Module):
 
         for i in range(self.tk):
             for j in range(self.sk):
-                node_emb = nn.Parameter(torch.randn(self.num_nodes, self.num_nodes), requires_grad=True)
+                node_emb = nn.Parameter(torch.randn(self.num_nodes, config.node_emb), requires_grad=True)
                 self.register_parameter(f"{i}_{j}_node_emb", node_emb)
                 self.node_emb.append(node_emb)
 
-                st_encoder = ["STGCN", "MTGNN", "GraphWavenet"][random.randint(0, 2)]
+                st_encoder = ["STGCN", "MTGNN", "STSSL"][random.randint(0, 2)]
                 logging.info(f"{i} {j} ~ {st_encoder}")
 
                 md_block = MDBlock(copy.deepcopy(config), supports, i, j, st_encoder)
@@ -44,7 +44,7 @@ class STDecomposition(Module):
         for i in range(self.tk):
             # N C V V l
             for j in range(self.sk):
-                pred.append(self.mds[i * self.sk + j](x[i][j], self.get_adj(self.node_emb[i * self.sk + j])))
+                pred.append(self.mds[i * self.sk + j](x[i][j], [self.get_adj(self.node_emb[i * self.sk + j])]))
             # pred.append(sub_preds)
         # tksk N C_h V L
         return pred

@@ -4,7 +4,7 @@ from configs.arguments import TrainingArguments
 
 
 class STGCNConfig(TrainingArguments):
-    Ks: int = Field(3)
+    Ks: int = Field(2)
     Kt: int = Field(3)
     graph_conv_type: str = Field("chebconv")
     use_gcn: bool = Field(True)

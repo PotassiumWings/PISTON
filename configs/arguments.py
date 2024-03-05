@@ -27,6 +27,7 @@ class TrainingArguments(BaseModel):
     # for decomposing
     p: int = Field(3)
     q: int = Field(3)
+    node_emb: int = Field(10)
 
     seed: int = Field(0)
     load: str = Field("")
