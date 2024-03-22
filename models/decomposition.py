@@ -48,14 +48,14 @@ class STDecomposition(Module):
 
         pred = []
         for i in range(self.tk):
-            # N C V V l
+            # N V V l
             for j in range(self.sk):
                 idx = i * self.sk + j
-                # N 1 V V l -> N 1 V C' L
+                # N V V l -> N V C' L
                 # input_x = torch.mm(x[idx], self.conv[idx])  # N C_hid V L
-                input_x = torch.einsum("ncvwl,wd->ncvdl", (x[idx], self.conv[idx]))  # N 1 V C_h L
+                input_x = torch.einsum("nvwl,wd->nvdl", (x[idx], self.conv[idx]))  # N V C_h L
                 # N C_h V L
-                input_x = input_x.squeeze(1).permute(0, 2, 1, 3)
+                input_x = input_x.permute(0, 2, 1, 3)
                 # N C_h V L_o
                 y = self.mds[idx](input_x, [self.get_adj(self.node_emb[idx])])
                 # N V C_h L_o
@@ -70,10 +70,9 @@ class STDecomposition(Module):
         return pred
 
     def decomposition(self, x):
-        # x: N L V V -> N 1 V V L
+        # x: N L V V -> N V V L
         # x -> tk
         x = x.permute(0, 2, 3, 1)
-        x = x.unsqueeze(1)
 
         wavelet = pywt.Wavelet("haar")
         # logging.info("wavedec start")
@@ -81,29 +80,33 @@ class STDecomposition(Module):
         # logging.info("wavedec end")
         x = x[::-1]
 
-        # x: [y1, y2, ..., ytk], y NCVVl
-        # res = []
-        # for i in range(self.tk):
-        #     logging.info("svd start")
-        #     u, sig, v = torch.svd(x[i].permute(0, 1, 4, 2, 3))  # NClVV
-        #     logging.info("svd end")
-        #     y = []
-        #     for j in range(self.sk - 1):
-        #         ui, sigi, vi = u[..., j:j + 1], sig[..., j:j + 1], v[..., j:j + 1]
-        #         # mat: NClVV
-        #         mat = torch.matmul(torch.matmul(ui, torch.diag_embed(sigi)), vi.transpose(-2, -1))
-        #         # N 2C l V
-        #         y.append(self.get_flows(mat))
-        #
-        #     # residual term
-        #     mat = torch.matmul(torch.matmul(u[..., self.sk:], torch.diag_embed(sig[..., self.sk:])),
-        #                        v[..., self.sk:].transpose(-2, -1))
-        #     y.append(self.get_flows(mat))
-        #
-        #     res.append(y)
-        # res: tk sk  N 2C l V
+        # x: [y1, y2, ..., ytk], y NVVl
+        res = []
+        for i in range(self.tk):
+            if self.sk == 1:
+                res.append(x[i])
+                continue
+
+            # logging.info("svd start")
+            u, sig, v = torch.svd(x[i].permute(0, 2, 3, 1))  # NlVV
+            # logging.info("svd end")
+            y = []
+            for j in range(self.sk - 1):
+                ui, sigi, vi = u[..., j:j + 1], sig[..., j:j + 1], v[..., j:j + 1]
+                # mat: NlVV
+                mat = torch.matmul(torch.matmul(ui, torch.diag_embed(sigi)), vi.transpose(-2, -1))
+                # N V V l
+                y.append(mat.permute(0, 2, 3, 1))
+
+            # residual term
+            mat = torch.matmul(torch.matmul(u[..., self.sk:], torch.diag_embed(sig[..., self.sk:])),
+                               v[..., self.sk:].transpose(-2, -1))
+            y.append(mat.permute(0, 2, 3, 1))
+
+            res.append(y)
+        # res: tk sk  N V V l
         # x: tk NCVVl
-        return x
+        return res
 
     def get_adj(self, node_emb):
         return F.softmax(F.relu(torch.mm(node_emb, node_emb.transpose(0, 1))), dim=1)

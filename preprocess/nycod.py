@@ -13,7 +13,7 @@ train_data = data[:train_index, :, :]
 val_data = data[train_index:val_index, :, :]
 test_data = data[val_index:, :, :]
 
-timestep = 48  # 1day
+timestep = 12  # 1day
 
 
 def get_data(origin_data):
@@ -25,9 +25,9 @@ def get_data(origin_data):
 
 
 x, y = get_data(train_data)
-np.savez_compressed("../data/NYC-TOD/train.npz", x=x, y=y)
+np.savez_compressed("../data/NYC-TOD2/train.npz", x=x, y=y)
 x, y = get_data(val_data)
-np.savez_compressed("../data/NYC-TOD/val.npz", x=x, y=y)
+np.savez_compressed("../data/NYC-TOD2/val.npz", x=x, y=y)
 x, y = get_data(test_data)
-np.savez_compressed("../data/NYC-TOD/test.npz", x=x, y=y)
+np.savez_compressed("../data/NYC-TOD2/test.npz", x=x, y=y)
 
