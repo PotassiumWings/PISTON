@@ -18,9 +18,9 @@ class STGDL(nn.Module):
         self.std = STDecomposition(config, supports)
         self.add_module(f"std", self.std)
 
-        self.weights = nn.Parameter(torch.zeros(size=(self.std.total, 1, self.config.c_hid,
-                                                      self.num_nodes, self.config.output_len)))
-        self.register_parameter(f"gather_weights", self.weights)
+        # self.weights = nn.Parameter(torch.zeros(size=(self.std.total, 1, self.config.num_nodes,
+        #                                               self.num_nodes, self.config.output_len)))
+        # self.register_parameter(f"gather_weights", self.weights)
 
         self.end_conv = nn.Conv2d(in_channels=self.config.c_hid, out_channels=self.config.c_out,
                                   kernel_size=(1, 1), bias=True)
@@ -34,9 +34,10 @@ class STGDL(nn.Module):
 
         res = 0
         for i in range(self.std.total):
-            res += self.weights[i] * preds[i]
+            res += preds[i]
+            # res += self.weights[i] * preds[i]
         # res: N C_h V L -> N C_o V L
-        res = self.end_conv(res)
+        # res = self.end_conv(res)
         return res
 
     def calculate_loss(self, ys, preds):

@@ -2,14 +2,14 @@ from pydantic import BaseModel, Field
 
 
 class TrainingArguments(BaseModel):
-    dataset_name: str = Field("NYCBike")
+    dataset_name: str = Field("NYC-TOD")
     # data feature
-    input_len: int = Field(32)  # Time step len
+    input_len: int = Field(48)  # Time step len
     output_len: int = Field(1)  # next step prediction, not changeable
-    num_nodes: int = Field(330)
+    num_nodes: int = Field(75)
     c_in: int = Field(1)  # feature dim
     c_hid: int = Field(8)  # hidden dim
-    c_out: int = Field(2)  # out dim
+    c_out: int = Field(1)  # out dim
 
     batch_size: int = Field(32)
     early_stop_batch: int = Field(10000)
@@ -26,7 +26,7 @@ class TrainingArguments(BaseModel):
 
     # for decomposing
     p: int = Field(2)
-    q: int = Field(3)
+    q: int = Field(1)
     node_emb: int = Field(10)
 
     seed: int = Field(0)

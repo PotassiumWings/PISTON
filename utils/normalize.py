@@ -138,8 +138,8 @@ class LogScaler(Scaler):
 
 
 def get_scaler(scaler, data: torch.Tensor):
-    # data NLVV -> NLV
-    data = data.sum(-2)
+    # # data NLVV -> NLV
+    # data = data.sum(-2)
 
     if scaler == "MM11":
         return MinMax11Scaler(data.min(), data.max())

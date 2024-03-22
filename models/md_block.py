@@ -34,10 +34,9 @@ class MDBlock(nn.Module):
         for i in range(min(temporal_index + 1, config.p - 1)):
             config.input_len //= 2
         logging.info(f"\t{temporal_index} {spatio_index} input_len={config.input_len}")
-        config.c_out = config.c_hid
-        config.c_in *= 2
+        config.c_in = config.c_out = config.c_hid
         config.st_encoder = st_encoder
-        # in:   N 2C_in V L()
+        # in:   N C_hid V L()
         # out:  N C_hid V L_out
 
         if config.st_encoder == "STGCN":
