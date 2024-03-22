@@ -20,6 +20,8 @@ class MDBlock(nn.Module):
         super(MDBlock, self).__init__()
         self.conv: AbstractSTEncoder
 
+        origin_config = config
+
         if st_encoder == "STGCN":
             config = STGCNConfig()
         elif st_encoder == "GraphWavenet":
@@ -30,6 +32,9 @@ class MDBlock(nn.Module):
             config = STSSLConfig()
         elif st_encoder == "MSDR":
             config = MSDRConfig()
+        for k, v in origin_config:
+            if k in origin_config.__fields__:
+                config.__setattr__(k, v)
 
         for i in range(min(temporal_index + 1, config.p - 1)):
             config.input_len //= 2

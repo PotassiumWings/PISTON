@@ -44,8 +44,6 @@ class Trainer:
             for i, (x, y) in enumerate(train_iter):
                 ys.append(y)
                 pred = self.model(x)
-                import pdb
-                pdb.set_trace()
                 preds.append(pred)
 
                 loss = self.model.calculate_loss(y, pred)
