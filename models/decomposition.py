@@ -44,6 +44,7 @@ class STDecomposition(Module):
                 self.add_module(f"{i}_{j}_md", md_block)
 
     def forward(self, x):
+        # N L V V -> N V V L
         x = self.decomposition(x)
 
         pred = []
@@ -88,24 +89,20 @@ class STDecomposition(Module):
                 continue
 
             # logging.info("svd start")
-            u, sig, v = torch.svd(x[i].permute(0, 2, 3, 1))  # NlVV
+            u, sig, v = torch.svd(x[i].permute(0, 3, 1, 2))  # NlVV
             # logging.info("svd end")
-            y = []
             for j in range(self.sk - 1):
                 ui, sigi, vi = u[..., j:j + 1], sig[..., j:j + 1], v[..., j:j + 1]
                 # mat: NlVV
                 mat = torch.matmul(torch.matmul(ui, torch.diag_embed(sigi)), vi.transpose(-2, -1))
                 # N V V l
-                y.append(mat.permute(0, 2, 3, 1))
+                res.append(mat.permute(0, 2, 3, 1))
 
             # residual term
             mat = torch.matmul(torch.matmul(u[..., self.sk:], torch.diag_embed(sig[..., self.sk:])),
                                v[..., self.sk:].transpose(-2, -1))
-            y.append(mat.permute(0, 2, 3, 1))
-
-            res.append(y)
+            res.append(mat.permute(0, 2, 3, 1))
         # res: tk sk  N V V l
-        # x: tk NCVVl
         return res
 
     def get_adj(self, node_emb):

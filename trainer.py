@@ -42,6 +42,7 @@ class Trainer:
             ys, preds = [], []
             jump_flag = False
             for i, (x, y) in enumerate(train_iter):
+                # N L V V
                 ys.append(y)
                 pred = self.model(x)
                 preds.append(pred)

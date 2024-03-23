@@ -33,8 +33,8 @@ class MDBlock(nn.Module):
         elif st_encoder == "MSDR":
             config = MSDRConfig()
         for k, v in origin_config:
-            if k in origin_config.__fields__:
-                config.__setattr__(k, v)
+            # if k in origin_config.__fields__:
+            config.__setattr__(k, v)
 
         for i in range(min(temporal_index + 1, config.p - 1)):
             config.input_len //= 2
