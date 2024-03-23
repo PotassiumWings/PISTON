@@ -1,19 +1,26 @@
 import numpy as np
 
 
-data = np.load("../data/NYC-TOD/oddata.npy", allow_pickle=True, encoding='latin1')[()][0]
+origin_data = np.load("../data/NYC-TOD/oddata.npy", allow_pickle=True, encoding='latin1')[()][0]
 
-t, n, r, c = data.shape
+t, n, r, c = origin_data.shape
 
-data = data.reshape(t, n, n)
-train_index = int(t * 0.7)
-val_index = int(t * 0.8)
+# t = 365 * 24 * 2
+
+data = origin_data.reshape(t // 4, 4, n, n)
+
+data = data.sum(1)
+t //= 4
+
+train_index = int(t * 0.35)
+val_index = int(t * 0.4)
+test_index = int(t * 0.5)
 
 train_data = data[:train_index, :, :]
 val_data = data[train_index:val_index, :, :]
-test_data = data[val_index:, :, :]
+test_data = data[val_index:test_index, :, :]
 
-timestep = 24  # 1day
+timestep = 48  # 4day
 
 
 def get_data(origin_data):
@@ -25,9 +32,8 @@ def get_data(origin_data):
 
 
 x, y = get_data(train_data)
-np.savez_compressed("../data/NYC-TOD3/train.npz", x=x, y=y)
+np.savez_compressed("../data/NYC-TOD4/train.npz", x=x, y=y)
 x, y = get_data(val_data)
-np.savez_compressed("../data/NYC-TOD3/val.npz", x=x, y=y)
+np.savez_compressed("../data/NYC-TOD4/val.npz", x=x, y=y)
 x, y = get_data(test_data)
-np.savez_compressed("../data/NYC-TOD3/test.npz", x=x, y=y)
-
+np.savez_compressed("../data/NYC-TOD4/test.npz", x=x, y=y)
