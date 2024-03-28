@@ -14,7 +14,7 @@ from models.md_block import MDBlock
 
 
 class STDecomposition(Module):
-    def __init__(self, config: TrainingArguments, supports):
+    def __init__(self, config: TrainingArguments, supports, scaler):
         super(STDecomposition, self).__init__()
         # self.adj = supports[0]
         self.tk = config.p
@@ -31,19 +31,15 @@ class STDecomposition(Module):
                 self.register_parameter(f"{i}_{j}_node_emb", node_emb)
                 self.node_emb.append(node_emb)
 
-                conv = nn.Parameter(torch.randn(self.num_nodes, config.c_hid), requires_grad=True)
-                self.register_parameter(f"{i}_{j}_conv", conv)
-                self.conv.append(conv)
-
                 # st_encoder = ["STGCN", "MTGNN", "STSSL"][random.randint(0, 2)]
                 st_encoder = "STGCN"
                 logging.info(f"{i} {j} ~ {st_encoder}")
 
-                md_block = MDBlock(copy.deepcopy(config), supports, i, j, st_encoder)
+                md_block = MDBlock(copy.deepcopy(config), supports, i, j, st_encoder, scaler)
                 self.mds.append(md_block)
                 self.add_module(f"{i}_{j}_md", md_block)
 
-    def forward(self, x):
+    def forward(self, x, trues):
         # N L V V -> N V V L
         x = self.decomposition(x)
 
@@ -53,12 +49,7 @@ class STDecomposition(Module):
             for j in range(self.sk):
                 idx = i * self.sk + j
                 # N V V l -> N V C' L
-                # input_x = torch.mm(x[idx], self.conv[idx])  # N C_hid V L
-                input_x = torch.einsum("nvwl,wd->nvdl", (x[idx], self.conv[idx]))  # N V C_h L
-                # N C_h V L
-                input_x = input_x.permute(0, 2, 1, 3)
-                # N C_h V L_o
-                y = self.mds[idx](input_x, [self.get_adj(self.node_emb[idx])])
+                y = self.mds[idx](x[idx], [self.get_adj(self.node_emb[idx])], trues)
                 # N V C_h L_o
                 y = y.permute(0, 2, 1, 3)
                 # N V V L_o
@@ -67,7 +58,7 @@ class STDecomposition(Module):
                 # N L_o V V
                 pred.append(y.permute(0, 3, 1, 2))
             # pred.append(sub_preds)
-        # tksk N C_h V L
+        # tksk N L_o V V
         return pred
 
     def decomposition(self, x):
@@ -117,3 +108,9 @@ class STDecomposition(Module):
         # N 2C l V
         flows = torch.cat([inflow, outflow], dim=1)
         return flows.permute(0, 1, 3, 2)
+
+    def get_forward_loss(self):
+        res = 0
+        for i in range(len(self.mds)):
+            res += self.mds[i].get_forward_loss()
+        return res

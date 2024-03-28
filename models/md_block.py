@@ -1,5 +1,6 @@
 import torch.nn as nn
 
+import torch
 import logging
 from configs.arguments import TrainingArguments
 from configs.GraphWavenet_configs import GraphWavenetConfig
@@ -16,25 +17,21 @@ from models.abstract_st_encoder import AbstractSTEncoder
 
 
 class MDBlock(nn.Module):
-    def __init__(self, config: TrainingArguments, supports: list, temporal_index, spatio_index, st_encoder):
+    def __init__(self, config: TrainingArguments, supports: list, temporal_index, spatio_index, st_encoder, scaler):
         super(MDBlock, self).__init__()
         self.conv: AbstractSTEncoder
 
         origin_config = config
 
-        if st_encoder == "STGCN":
-            config = STGCNConfig()
-        elif st_encoder == "GraphWavenet":
-            config = GraphWavenetConfig()
-        elif st_encoder == "MTGNN":
-            config = MTGNNConfig()
-        elif st_encoder == "STSSL":
-            config = STSSLConfig()
-        elif st_encoder == "MSDR":
-            config = MSDRConfig()
+        config = locals()[st_encoder + "Config"]()
         for k, v in origin_config:
             # if k in origin_config.__fields__:
             config.__setattr__(k, v)
+
+        self.adj_conv = None
+        if config.is_od_model:
+            self.adj_conv = nn.Parameter(torch.randn(self.num_nodes, config.c_hid), requires_grad=True)
+            self.register_parameter(f"{temporal_index}_{spatio_index}_conv", self.adj_conv)
 
         for i in range(min(temporal_index + 1, config.p - 1)):
             config.input_len //= 2
@@ -44,23 +41,30 @@ class MDBlock(nn.Module):
         # in:   N C_hid V L()
         # out:  N C_hid V L_out
 
-        if config.st_encoder == "STGCN":
-            self.conv = STGCN(config, supports)
-        elif config.st_encoder == "GraphWavenet":
-            self.conv = GraphWavenet(config, supports)
-        elif config.st_encoder == "STSSL":
-            self.conv = STSSL(config, supports)
-        elif config.st_encoder == "MSDR":
-            self.conv = MSDR(config, supports)
-        elif config.st_encoder == "MTGNN":
-            self.conv = MTGNN(config, supports)
-        else:
-            raise NotImplementedError(f"ST Encoder {config.st_encoder} not implemented.")
+        self.conv = locals()[config.st_encoder](config, supports, scaler)
 
-    def forward(self, x, subgraph):
-        # x: (batch_size, c_in, num_nodes, input_len)
-        pred = self.conv(x, subgraph)
-        return pred
+    def forward(self, x, subgraph, trues):
+        # x: N V V L
+        input_x = x
+        is_od = self.adj_conv is None
+
+        # model is not OD model
+        if not is_od:
+            input_x = torch.einsum("nvwl,wd->nvdl", (input_x, self.adj_conv))  # N V C_h L
+            # N C_h V L
+            input_x = input_x.permute(0, 2, 1, 3)
+
+        # N C_h V L_o
+        # N V V L_o
+        y = self.conv(input_x, subgraph, trues)
+
+        if not is_od:
+            # N V C_h L_o
+            y = y.permute(0, 2, 1, 3)
+            # N V V L_o
+            y = torch.einsum("nvcl,cw->nvwl", (y, self.adj_conv.t()))
+
+        return y
 
     def get_embedding(self):
         return self.conv.get_embedding()

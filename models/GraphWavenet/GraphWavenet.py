@@ -17,8 +17,8 @@ def calc_sym(adj):
 
 
 class GraphWavenet(AbstractSTEncoder):
-    def __init__(self, config: GraphWavenetConfig, gp_supports):
-        super(GraphWavenet, self).__init__(config, gp_supports)
+    def __init__(self, config: GraphWavenetConfig, gp_supports, scaler):
+        super(GraphWavenet, self).__init__(config, gp_supports, scaler)
         assert (len(gp_supports) == 1)
         self.dropout = config.dropout
         self.blocks = config.blocks
@@ -84,7 +84,7 @@ class GraphWavenet(AbstractSTEncoder):
         self.receptive_field = receptive_field
         logging.info(f"Receptive field: {receptive_field}")
 
-    def forward(self, x, supports):
+    def forward(self, x, supports, _):
         adj = supports[0]
         # change 1: input format
         # x: (batch_size, feature_dim, num_nodes, input_window)

@@ -15,8 +15,8 @@ from models.loss import masked_mae_loss
 
 
 class STSSL(AbstractSTEncoder):
-    def __init__(self, config: STSSLConfig, gp_supports):
-        super(STSSL, self).__init__(config, gp_supports)
+    def __init__(self, config: STSSLConfig, gp_supports, scaler):
+        super(STSSL, self).__init__(config, gp_supports, scaler)
         self.aug_percent = config.aug_percent
         self.num_nodes = config.num_nodes
         self.c_in = config.c_in
@@ -38,7 +38,7 @@ class STSSL(AbstractSTEncoder):
         self.shm = SpatialHeteroModel(self.hidden_size, config.nmb_prototype, config.batch_size, config.shm_temp)
         self.mae = masked_mae_loss(mask_value=5.0)
 
-    def forward(self, x, supports):
+    def forward(self, x, supports, _):
         view1 = x.permute(0, 3, 2, 1)
         graph = supports[0]  # view1: n,l,v,c; graph: v,v
 

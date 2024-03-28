@@ -9,6 +9,14 @@ def masked_mae_loss(mask_value):
     return loss
 
 
+def masked_mse_loss(mask_value):
+    def loss(preds, labels):
+        mse = mse_torch(pred=preds, true=labels, mask_value=mask_value)
+        return mse
+
+    return loss
+
+
 def masked_huber_loss(mask_value, delta):
     def loss(preds, labels):
         return huber_torch(preds, labels, mask_value, delta)
@@ -50,3 +58,11 @@ def rmse_torch(pred, true, mask_value=None):
         pred = torch.masked_select(pred, mask)
         true = torch.masked_select(true, mask)
     return torch.sqrt(torch.mean(torch.square(pred - true)))
+
+
+def mse_torch(pred, true, mask_value=None):
+    if mask_value is not None:
+        mask = torch.gt(true, mask_value)
+        pred = torch.masked_select(pred, mask)
+        true = torch.masked_select(true, mask)
+    return torch.mean(torch.square(pred - true))

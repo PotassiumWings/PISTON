@@ -8,8 +8,8 @@ from models.abstract_st_encoder import AbstractSTEncoder
 
 
 class MTGNN(AbstractSTEncoder):
-    def __init__(self, config: MTGNNConfig, gp_supports):
-        super(MTGNN, self).__init__(config, gp_supports)
+    def __init__(self, config: MTGNNConfig, gp_supports, scaler):
+        super(MTGNN, self).__init__(config, gp_supports, scaler)
 
         self.num_nodes = config.num_nodes
         self.dropout = config.dropout
@@ -116,7 +116,7 @@ class MTGNN(AbstractSTEncoder):
 
         self.idx = torch.arange(self.num_nodes).to(self.device)
 
-    def forward(self, x, supports):
+    def forward(self, x, supports, _):
         input_x = x
         seq_len = input_x.size(3)
         assert seq_len == self.seq_length, 'input sequence length not equal to preset sequence length'

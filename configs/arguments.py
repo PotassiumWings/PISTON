@@ -34,3 +34,4 @@ class TrainingArguments(BaseModel):
 
     mae_mask: int = Field(5)
     st_encoder: str = Field("STGCN")
+    is_od_model: bool = Field(False)

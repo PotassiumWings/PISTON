@@ -8,8 +8,8 @@ from models.abstract_st_encoder import AbstractSTEncoder
 
 
 class STGCN(AbstractSTEncoder):
-    def __init__(self, config: STGCNConfig, gp_supports):
-        super(STGCN, self).__init__(config, gp_supports)
+    def __init__(self, config: STGCNConfig, gp_supports, scaler):
+        super(STGCN, self).__init__(config, gp_supports, scaler)
         self.config: STGCNConfig
         assert (len(gp_supports) == 1)
         self._logger = getLogger()
@@ -53,7 +53,7 @@ class STGCN(AbstractSTEncoder):
         # self.output_2 = OutputLayer(self.blocks[1][2], self.input_window - len(self.blocks) * 2
         #                             * (self.Kt - 1), self.num_nodes, out_dim=c_in)
 
-    def forward(self, x, gp_supports):
+    def forward(self, x, gp_supports, _):
         # x: (batch_size, c_in, num_nodes, input_len)
         x = nn.functional.pad(x, (self.time_padding, 0, 0, 0, 0, 0))
 

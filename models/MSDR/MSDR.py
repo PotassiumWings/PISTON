@@ -77,8 +77,8 @@ class DecoderModel(nn.Module, Seq2SeqAttrs):
 
 
 class MSDR(AbstractSTEncoder, Seq2SeqAttrs):
-    def __init__(self, config: MSDRConfig, gp_supports):
-        super(MSDR, self).__init__(config, gp_supports)
+    def __init__(self, config: MSDRConfig, gp_supports, scaler):
+        super(MSDR, self).__init__(config, gp_supports, scaler)
         Seq2SeqAttrs.__init__(self, config)
         self.encoder_model = EncoderModel(config)
         self.decoder_pred = DecoderModel(config, c_out=config.c_out, output_len=config.output_len)
@@ -118,7 +118,7 @@ class MSDR(AbstractSTEncoder, Seq2SeqAttrs):
         outputs = torch.stack(outputs)
         return outputs
 
-    def forward(self, x, supports):
+    def forward(self, x, supports, _):
         """
         seq2seq forward pass
         :param supports: supports

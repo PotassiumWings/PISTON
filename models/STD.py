@@ -15,7 +15,7 @@ class STGDL(nn.Module):
         self.scaler = scaler
         self.num_nodes = config.num_nodes
 
-        self.std = STDecomposition(config, supports)
+        self.std = STDecomposition(config, supports, scaler)
         self.add_module(f"std", self.std)
 
         # self.weights = nn.Parameter(torch.zeros(size=(self.std.total, 1, self.config.num_nodes,
@@ -27,18 +27,18 @@ class STGDL(nn.Module):
 
         self.loss_func = loss.masked_mae_loss(config.mae_mask)
 
-    def forward(self, x):
+    def forward(self, x, trues):
         # x: NCVL
-        # preds: tk*sk N C_h V L
-        preds = self.std(x)
+        # preds: tk*sk N L_o V V
+        preds = self.std(x, trues, self.scaler)
 
         res = 0
         for i in range(self.std.total):
             res += preds[i]
-            # res += self.weights[i] * preds[i]
-        # res: N C_h V L -> N C_o V L
-        # res = self.end_conv(res)
-        return res
+        return self.scaler.inverse_transform(res)
 
-    def calculate_loss(self, ys, preds):
-        return self.loss_func(preds, ys)
+    def calculate_loss(self, ys, preds, get_forward_loss=True):
+        res = self.loss_func(preds, ys)
+        if get_forward_loss:
+            res += self.std.get_forward_loss()
+        return res
