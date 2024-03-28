@@ -8,11 +8,13 @@ from configs.MSDR_configs import MSDRConfig
 from configs.MTGNN_configs import MTGNNConfig
 from configs.STSSL_configs import STSSLConfig
 from configs.STGCN_configs import STGCNConfig
+from configs.GEML_configs import GEMLConfig
 from models.GraphWavenet.GraphWavenet import GraphWavenet
 from models.MSDR.MSDR import MSDR
 from models.MTGNN.MTGNN import MTGNN
 from models.STGCN.STGCN import STGCN
 from models.STSSL.STSSL import STSSL
+from models.GEML.GEML import GEML
 from models.abstract_st_encoder import AbstractSTEncoder
 
 
@@ -23,14 +25,14 @@ class MDBlock(nn.Module):
 
         origin_config = config
 
-        config = locals()[st_encoder + "Config"]()
+        config = globals()[st_encoder + "Config"]()
         for k, v in origin_config:
             # if k in origin_config.__fields__:
             config.__setattr__(k, v)
 
         self.adj_conv = None
-        if config.is_od_model:
-            self.adj_conv = nn.Parameter(torch.randn(self.num_nodes, config.c_hid), requires_grad=True)
+        if not config.is_od_model:
+            self.adj_conv = nn.Parameter(torch.randn(config.num_nodes, config.c_hid), requires_grad=True)
             self.register_parameter(f"{temporal_index}_{spatio_index}_conv", self.adj_conv)
 
         for i in range(min(temporal_index + 1, config.p - 1)):
@@ -41,7 +43,7 @@ class MDBlock(nn.Module):
         # in:   N C_hid V L()
         # out:  N C_hid V L_out
 
-        self.conv = locals()[config.st_encoder](config, supports, scaler)
+        self.conv = globals()[config.st_encoder](config, supports, scaler)
 
     def forward(self, x, subgraph, trues):
         # x: N V V L

@@ -30,7 +30,7 @@ class STGDL(nn.Module):
     def forward(self, x, trues):
         # x: NCVL
         # preds: tk*sk N L_o V V
-        preds = self.std(x, trues, self.scaler)
+        preds = self.std(x, trues)
 
         res = 0
         for i in range(self.std.total):

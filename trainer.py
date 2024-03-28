@@ -106,7 +106,7 @@ class Trainer:
             for i, (x, y) in enumerate(data_iter):
                 xs.append(x.cpu())
                 trues.append(y.cpu())  # NCVL'
-                pred = self.model(x)
+                pred = self.model(x, y)
                 preds.append(pred.cpu())  # NCVL'
 
         preds = torch.cat(preds, dim=0)

@@ -84,11 +84,6 @@ class MutiLearning(nn.Module):
         # (B, N, 2E)
         x = torch.matmul(x, x_t)
         # (B, N, N)
-
-        x = x.unsqueeze(dim=-1).unsqueeze(dim=1)
-        x_in = x_in.unsqueeze(dim=-1).unsqueeze(dim=1)
-        x_out = x_out.unsqueeze(dim=-1).unsqueeze(dim=1)
-
         return x, x_in, x_out
 
 
@@ -229,13 +224,13 @@ class GEML(AbstractSTEncoder):
         y_pred, y_in, y_out = self.mutiLearning(x_embed_pred)
 
         y_true = trues  # (B, TO, N, N)
-        y_in_true = torch.sum(y_true, dim=-1, keepdim=True)  # (B, TO, N)
-        y_out_true = torch.sum(y_true, dim=-2, keepdim=True)  # (B, TO, N)
+        y_in_true = torch.sum(y_true, dim=-1)  # (B, TO, N)
+        y_out_true = torch.sum(y_true, dim=-2)  # (B, TO, N)
 
         y_in = self.scaler.inverse_transform(y_in)
         y_out = self.scaler.inverse_transform(y_out)
         loss_in = mse(y_in, y_in_true)
         loss_out = mse(y_out, y_out_true)
         self.forward_loss = self.loss_p1 * loss_in + self.loss_p2 * loss_out
-
-        return y_pred
+        assert self.config.output_len == 1
+        return y_pred.unsqueeze(3)

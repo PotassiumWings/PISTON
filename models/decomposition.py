@@ -32,7 +32,7 @@ class STDecomposition(Module):
                 self.node_emb.append(node_emb)
 
                 # st_encoder = ["STGCN", "MTGNN", "STSSL"][random.randint(0, 2)]
-                st_encoder = "STGCN"
+                st_encoder = "GEML"
                 logging.info(f"{i} {j} ~ {st_encoder}")
 
                 md_block = MDBlock(copy.deepcopy(config), supports, i, j, st_encoder, scaler)
@@ -48,13 +48,8 @@ class STDecomposition(Module):
             # N V V l
             for j in range(self.sk):
                 idx = i * self.sk + j
-                # N V V l -> N V C' L
+                # N V V l -> N V C' L / N V V L_o
                 y = self.mds[idx](x[idx], [self.get_adj(self.node_emb[idx])], trues)
-                # N V C_h L_o
-                y = y.permute(0, 2, 1, 3)
-                # N V V L_o
-                y = torch.einsum("nvcl,cw->nvwl", (y, self.conv[idx].t()))
-                # y = torch.mm(y, self.conv[idx].t())
                 # N L_o V V
                 pred.append(y.permute(0, 3, 1, 2))
             # pred.append(sub_preds)
