@@ -147,9 +147,11 @@ def generate_geo_adj(distance_matrix: np.matrix):
     return weight_matrix  # (N, N)
 
 
-def generate_semantic_adj(demand_matrix, device):
+def generate_semantic_adj(demand_matrix, scaler, device):
     # (B, T, N, N)
     adj_matrix = demand_matrix.clone()
+    adj_matrix = scaler.inverse_transform(adj_matrix)
+
     in_matrix = adj_matrix.permute(0, 1, 3, 2)
 
     adj_matrix[adj_matrix > 0] = 1
@@ -200,7 +202,7 @@ class GEML(AbstractSTEncoder):
     def forward(self, x, gp_supports, trues):
         # N V V L -> N L V V
         x = x.permute(0, 3, 1, 2)
-        semantic_adj = generate_semantic_adj(x, self.device)
+        semantic_adj = generate_semantic_adj(x, self.scaler, self.device)
 
         # (B, T, N, N)
         x_ge_embed = self.GCN_ge(x, self.geo_adj[:x.shape[0], ...])
@@ -223,14 +225,14 @@ class GEML(AbstractSTEncoder):
 
         y_pred, y_in, y_out = self.mutiLearning(x_embed_pred)
 
-        y_true = trues  # (B, TO, N, N)
-        y_in_true = torch.sum(y_true, dim=-1)  # (B, TO, N)
-        y_out_true = torch.sum(y_true, dim=-2)  # (B, TO, N)
-
-        y_in = self.scaler.inverse_transform(y_in)
-        y_out = self.scaler.inverse_transform(y_out)
-        loss_in = mse(y_in, y_in_true)
-        loss_out = mse(y_out, y_out_true)
-        self.forward_loss = self.loss_p1 * loss_in + self.loss_p2 * loss_out
+        # y_true = trues  # (B, TO, N, N)
+        # y_in_true = torch.sum(y_true, dim=-1)  # (B, TO, N)
+        # y_out_true = torch.sum(y_true, dim=-2)  # (B, TO, N)
+        #
+        # y_in = self.scaler.inverse_transform(y_in)
+        # y_out = self.scaler.inverse_transform(y_out)
+        # loss_in = mse(y_in, y_in_true, 1)
+        # loss_out = mse(y_out, y_out_true, 1)
+        # self.forward_loss = self.loss_p1 * loss_in + self.loss_p2 * loss_out
         assert self.config.output_len == 1
         return y_pred.unsqueeze(3)

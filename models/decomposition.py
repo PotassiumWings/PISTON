@@ -32,7 +32,7 @@ class STDecomposition(Module):
                 self.node_emb.append(node_emb)
 
                 # st_encoder = ["STGCN", "MTGNN", "STSSL"][random.randint(0, 2)]
-                st_encoder = "GEML"
+                st_encoder = config.st_encoder
                 logging.info(f"{i} {j} ~ {st_encoder}")
 
                 md_block = MDBlock(copy.deepcopy(config), supports, i, j, st_encoder, scaler)
