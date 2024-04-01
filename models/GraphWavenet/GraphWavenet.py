@@ -92,10 +92,11 @@ class GraphWavenet(AbstractSTEncoder):
         inputs = x
 
         in_len = inputs.size(3)
-        assert in_len < self.receptive_field
-        x = nn.functional.pad(inputs, (self.receptive_field - in_len, 0, 0, 0))
-        # else:
-        #     x = inputs
+        # assert in_len < self.receptive_field
+        if in_len < self.receptive_field:
+            x = nn.functional.pad(inputs, (self.receptive_field - in_len, 0, 0, 0))
+        else:
+            x = inputs
         x = self.start_conv(x)  # (batch_size, residual_channels, num_nodes, self.receptive_field)
         skip = 0
 

@@ -31,9 +31,12 @@ class MDBlock(nn.Module):
             config.__setattr__(k, v)
 
         self.adj_conv = None
+        self.adj_conv_back = None
         if not config.is_od_model:
             self.adj_conv = nn.Parameter(torch.randn(config.num_nodes, config.c_hid), requires_grad=True)
             self.register_parameter(f"{temporal_index}_{spatio_index}_conv", self.adj_conv)
+            self.adj_conv_back = nn.Parameter(torch.randn(config.c_hid, config.num_nodes), requires_grad=True)
+            self.register_parameter(f"{temporal_index}_{spatio_index}_conv2", self.adj_conv_back)
 
         for i in range(min(temporal_index + 1, config.p - 1)):
             config.input_len //= 2
@@ -64,7 +67,7 @@ class MDBlock(nn.Module):
             # N V C_h L_o
             y = y.permute(0, 2, 1, 3)
             # N V V L_o
-            y = torch.einsum("nvcl,cw->nvwl", (y, self.adj_conv.t()))
+            y = torch.einsum("nvcl,cw->nvwl", (y, self.adj_conv_back))
 
         return y
 
