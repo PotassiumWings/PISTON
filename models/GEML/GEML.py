@@ -225,14 +225,14 @@ class GEML(AbstractSTEncoder):
 
         y_pred, y_in, y_out = self.mutiLearning(x_embed_pred)
 
-        # y_true = trues  # (B, TO, N, N)
-        # y_in_true = torch.sum(y_true, dim=-1)  # (B, TO, N)
-        # y_out_true = torch.sum(y_true, dim=-2)  # (B, TO, N)
-        #
-        # y_in = self.scaler.inverse_transform(y_in)
-        # y_out = self.scaler.inverse_transform(y_out)
-        # loss_in = mse(y_in, y_in_true, 1)
-        # loss_out = mse(y_out, y_out_true, 1)
-        # self.forward_loss = self.loss_p1 * loss_in + self.loss_p2 * loss_out
+        y_true = trues  # (B, TO, N, N)
+        y_in_true = torch.sum(y_true, dim=-1)  # (B, TO, N)
+        y_out_true = torch.sum(y_true, dim=-2)  # (B, TO, N)
+
+        y_in = self.scaler.inverse_transform(y_in)
+        y_out = self.scaler.inverse_transform(y_out)
+        loss_in = mse(y_in, y_in_true, 1)
+        loss_out = mse(y_out, y_out_true, 1)
+        self.forward_loss = self.loss_p1 * loss_in + self.loss_p2 * loss_out
         assert self.config.output_len == 1
         return y_pred.unsqueeze(3)
