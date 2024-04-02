@@ -34,4 +34,6 @@ class TrainingArguments(BaseModel):
 
     mae_mask: int = Field(5)
     st_encoder: str = Field("STGCN")
+    model_pool: str = Field("STGCN,GraphWavenet,STSSL,MTGNN,CSTL")
     is_od_model: bool = Field(False)
+    model_pool_od: str = Field("00001")

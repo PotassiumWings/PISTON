@@ -40,9 +40,13 @@ class MDBlock(nn.Module):
             self.adj_conv_back = nn.Parameter(torch.randn(config.c_hid, config.num_nodes), requires_grad=True)
             self.register_parameter(f"{temporal_index}_{spatio_index}_conv2", self.adj_conv_back)
 
+        origin_input_len = config.input_len
         for i in range(min(temporal_index + 1, config.p - 1)):
-            config.input_len //= 2
-        logging.info(f"\t{temporal_index} {spatio_index} input_len={config.input_len}")
+            origin_input_len //= 2
+        self.padding_len = config.input_len - origin_input_len
+
+        logging.info(f"\t{temporal_index} {spatio_index} "
+                     f"input_len={config.input_len} padding_len={self.padding_len}")
         config.c_in = config.c_out = config.c_hid
         config.st_encoder = st_encoder
         # in:   N C_hid V L()
@@ -53,6 +57,9 @@ class MDBlock(nn.Module):
     def forward(self, x, subgraph, trues):
         # x: N V V L
         input_x = x
+        if self.padding_len > 0:
+            input_x = nn.functional.pad(input_x, (self.padding_len, 0, 0, 0))
+
         is_od = self.adj_conv is None
 
         # model is not OD model
