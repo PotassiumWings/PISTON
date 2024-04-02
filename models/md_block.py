@@ -9,12 +9,14 @@ from configs.MTGNN_configs import MTGNNConfig
 from configs.STSSL_configs import STSSLConfig
 from configs.STGCN_configs import STGCNConfig
 from configs.GEML_configs import GEMLConfig
+from configs.CSTN_configs import CSTNConfig
 from models.GraphWavenet.GraphWavenet import GraphWavenet
 from models.MSDR.MSDR import MSDR
 from models.MTGNN.MTGNN import MTGNN
 from models.STGCN.STGCN import STGCN
 from models.STSSL.STSSL import STSSL
 from models.GEML.GEML import GEML
+from models.CSTN.CSTN import CSTN
 from models.abstract_st_encoder import AbstractSTEncoder
 
 

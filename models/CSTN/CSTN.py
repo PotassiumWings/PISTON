@@ -271,8 +271,6 @@ class TEC(nn.Module):
 
     def forward(self, x):
         # (B, T, c_in, H, W)
-        import pdb
-        pdb.set_trace()
         (x, _) = self.ConvLSTM(x)[1][0]
         # (B, c_in, H, W)
         x = self.conv(x)
