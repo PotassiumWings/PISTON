@@ -43,15 +43,9 @@ class MyDataset(AbstractDataset):
     def _get_iter(self, filename, define_scaler=False, shuffle=True):
         data = np.load(filename)
         x, y = data['x'], data['y']
+        # x, y: N L V V
         x = torch.Tensor(x)
         y = torch.Tensor(y)
-        # y: N L V V
-        x = x.squeeze(1)
-        y = y.squeeze(1)
-        # y_inflow = y.sum(-2)
-        # y_outflow = y.sum(-1)
-        # # 2 N L V -> N 2 V L
-        # y = torch.stack([y_inflow, y_outflow]).permute(1, 0, 3, 2)
 
         if define_scaler:
             self.scaler = get_scaler(self.config.scaler, x)

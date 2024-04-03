@@ -1,3 +1,5 @@
+import copy
+
 import torch
 import torch.nn as nn
 
@@ -15,12 +17,23 @@ class STGDL(nn.Module):
         self.scaler = scaler
         self.num_nodes = config.num_nodes
 
-        self.std = STDecomposition(config, supports, scaler)
-        self.add_module(f"std", self.std)
-
-        # self.weights = nn.Parameter(torch.zeros(size=(self.std.total, 1, self.config.num_nodes,
-        #                                               self.num_nodes, self.config.output_len)))
-        # self.register_parameter(f"gather_weights", self.weights)
+        self.use_model_pool = config.use_model_pool
+        self.stds = []
+        if self.use_model_pool:
+            model_pool = config.model_pool
+            self.models = model_pool.split(",")
+            self.lm = len(self.models)
+            for i in range(self.lm):
+                temp_config = copy.deepcopy(config)
+                temp_config.st_encoder = self.models[i]
+                temp_config.is_od_model = config.model_pool_od[i] == '1'
+                std = STDecomposition(temp_config, supports, scaler)
+                self.stds.append(std)
+                self.add_module(f"std_{i}", std)
+        else:
+            std = STDecomposition(config, supports, scaler)
+            self.stds.append(std)
+            self.add_module(f"std", std)
 
         self.end_conv = nn.Conv2d(in_channels=self.config.c_hid, out_channels=self.config.c_out,
                                   kernel_size=(1, 1), bias=True)
@@ -30,15 +43,29 @@ class STGDL(nn.Module):
     def forward(self, x, trues):
         # x: NCVL
         # preds: tk*sk N L_o V V
-        preds = self.std(x, trues)
+        if self.use_model_pool:
+            res = []
+            for i in range(self.lm):
+                preds = self.stds[i](x, trues)
 
-        res = 0
-        for i in range(self.std.total):
-            res += preds[i]
+                for j in range(len(preds)):
+                    res.append(preds[j])
+            # res: tkskm N L_o V V
+            res = torch.stack(res) / (self.config.p * self.config.q * self.lm)
+        else:
+            res = 0
+            preds = self.stds[0](x, trues)
+            for i in range(len(preds)):
+                res += preds[i]
+
         return self.scaler.inverse_transform(res)
 
     def calculate_loss(self, ys, preds, get_forward_loss=True):
+        if self.use_model_pool:
+            ys = ys.unsqueeze(0)
+            ys = ys.broadcast_to(preds.shape)
         res = self.loss_func(preds, ys)
         if get_forward_loss:
-            res += self.std.get_forward_loss()
+            for i in range(len(self.stds)):
+                res += self.stds[i].get_forward_loss()
         return res

@@ -17,6 +17,7 @@ class STDecomposition(Module):
     def __init__(self, config: TrainingArguments, supports, scaler):
         super(STDecomposition, self).__init__()
         # self.adj = supports[0]
+        self.config = config
         self.tk = config.p
         self.sk = config.q
         self.num_nodes = config.num_nodes

@@ -6,7 +6,11 @@ class TrainingArguments(BaseModel):
     # data feature
     input_len: int = Field(48)  # Time step len
     output_len: int = Field(1)  # next step prediction, not changeable
+
     num_nodes: int = Field(75)
+    height: int = Field(15)
+    width: int = Field(5)
+
     c_in: int = Field(1)  # feature dim
     c_hid: int = Field(8)  # hidden dim
     c_out: int = Field(1)  # out dim
@@ -34,6 +38,8 @@ class TrainingArguments(BaseModel):
 
     mae_mask: int = Field(5)
     st_encoder: str = Field("STGCN")
-    model_pool: str = Field("STGCN,GraphWavenet,STSSL,MTGNN,CSTL")
     is_od_model: bool = Field(False)
+
+    model_pool: str = Field("STGCN,GraphWavenet,STSSL,MTGNN,CSTN")
     model_pool_od: str = Field("00001")
+    use_model_pool: bool = Field(False)

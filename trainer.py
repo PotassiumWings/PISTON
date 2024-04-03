@@ -60,7 +60,7 @@ class Trainer:
 
                 if self.current_num % self.config.show_period == 0:
                     # evaluate
-                    ys, preds = torch.cat(ys, dim=0), torch.cat(preds, dim=0)
+                    ys, preds = torch.cat(ys, dim=-4), torch.cat(preds, dim=-4)
                     self.model.eval()
 
                     train_loss = self.model.calculate_loss(ys, preds, False)
@@ -92,8 +92,13 @@ class Trainer:
     def visualize(self, dir_name):
         self.model.visualize(dir_name)
 
-    def eval(self, data_iter, debug=False, fast_eval=-1, tsne=-1):
+    def eval(self, data_iter, select=False):
         def metrics(pred, true):
+            if len(pred.shape) != len(true.shape):  # use model pool
+                assert len(pred.shape) == len(true.shape) + 1 == 5
+                assert pred.shape[1:] == true.shape
+                true = true.unsqueeze(0)
+                true = true.broadcast_to(pred.shape)
             return loss.rmse_torch(pred, true, self.config.mae_mask).item(), \
                 loss.mape_torch(pred, true, self.config.mae_mask).item(), \
                 loss.mae_torch(pred, true, self.config.mae_mask).item()
@@ -107,17 +112,29 @@ class Trainer:
                 xs.append(x.cpu())
                 trues.append(y.cpu())  # NCVL'
                 pred = self.model(x, y)
-                preds.append(pred.cpu())  # NCVL'
+                preds.append(pred.cpu())  # PNCVL'
 
-        preds = torch.cat(preds, dim=0)
-        trues = torch.cat(trues, dim=0)
-        xs = torch.cat(xs, dim=0)
+        preds = torch.cat(preds, dim=-4)
+        trues = torch.cat(trues, dim=-4)
+
+        if select:
+            sub_modules = self.config.p * self.config.q
+            for i in range(sub_modules):
+                maes = []
+                for j in range(self.model.lm):
+                    preds_j = preds[j * sub_modules + i]
+                    mae = loss.mae_torch(preds_j, trues, self.config.mae_mask).item()
+                    maes.append([mae, self.model.models[j]])
+                maes.sort(reverse=False, key=lambda ls: ls[0])
+                logging.info(f"{i}: " + str(maes))
+
+        # xs = torch.cat(xs, dim=0)
 
         ret = [metrics(preds, trues)]
         return ret
 
     def test(self):
-        metrics = self.eval(self.dataset.test_iter)
+        metrics = self.eval(self.dataset.test_iter, select=self.config.use_model_pool)
         test_rmse, test_mape, test_mae = metrics[0]
         logging.info(f"Test: rmse {test_rmse}, mae {test_mae}, mape {test_mape}")
         for i in range(len(metrics) - 1):

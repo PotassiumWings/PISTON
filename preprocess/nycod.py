@@ -25,8 +25,8 @@ timestep = 48  # 4day
 
 def get_data(origin_data):
     T, v, _ = origin_data.shape
-    res_x = np.asarray([[origin_data[i:i+timestep, :, :]] for i in range(T - timestep - 1)])
-    res_y = np.asarray([[origin_data[i+timestep:i+timestep+1, :, :]] for i in range(T - timestep - 1)])
+    res_x = np.asarray([origin_data[i:i+timestep, :, :] for i in range(T - timestep - 1)])
+    res_y = np.asarray([origin_data[i+timestep:i+timestep+1, :, :] for i in range(T - timestep - 1)])
     print(res_x.shape, res_y.shape)
     return res_x, res_y
 
