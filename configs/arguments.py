@@ -40,6 +40,6 @@ class TrainingArguments(BaseModel):
     st_encoder: str = Field("STGCN")
     is_od_model: bool = Field(False)
 
-    model_pool: str = Field("STGCN,GraphWavenet,STSSL,MTGNN,CSTN")
-    model_pool_od: str = Field("00001")
+    model_pool: str = Field("STGCN,GraphWavenet,STSSL,MTGNN")
+    model_pool_od: str = Field("0000")
     use_model_pool: bool = Field(False)

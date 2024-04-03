@@ -51,6 +51,7 @@ class STGDL(nn.Module):
         if self.use_model_pool:
             res = []
             for i in range(self.lm):
+                # logging.info(f"Proceeding {self.models[i]}...")
                 start_time = datetime.now()
                 preds = self.stds[i](x, trues)
                 self.used_time[i] += (datetime.now() - start_time).total_seconds()

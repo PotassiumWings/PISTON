@@ -41,6 +41,8 @@ class MDBlock(nn.Module):
             self.register_parameter(f"{temporal_index}_{spatio_index}_conv2", self.adj_conv_back)
 
         origin_input_len = config.input_len
+        if config.p > 1:
+            config.input_len //= 2
         for i in range(min(temporal_index + 1, config.p - 1)):
             origin_input_len //= 2
         self.padding_len = config.input_len - origin_input_len
