@@ -1,10 +1,13 @@
 import copy
 
 import torch
+import logging
 import torch.nn as nn
+import numpy as np
 
 from configs.arguments import TrainingArguments
 from models import loss
+from datetime import datetime
 from models.decomposition import STDecomposition
 from utils.normalize import Scaler
 
@@ -19,6 +22,7 @@ class STGDL(nn.Module):
 
         self.use_model_pool = config.use_model_pool
         self.stds = []
+        self.used_time = None
         if self.use_model_pool:
             model_pool = config.model_pool
             self.models = model_pool.split(",")
@@ -30,6 +34,7 @@ class STGDL(nn.Module):
                 std = STDecomposition(temp_config, supports, scaler)
                 self.stds.append(std)
                 self.add_module(f"std_{i}", std)
+            self.used_time = np.zeros(self.lm)
         else:
             std = STDecomposition(config, supports, scaler)
             self.stds.append(std)
@@ -46,7 +51,9 @@ class STGDL(nn.Module):
         if self.use_model_pool:
             res = []
             for i in range(self.lm):
+                start_time = datetime.now()
                 preds = self.stds[i](x, trues)
+                self.used_time[i] += (datetime.now() - start_time).total_seconds()
 
                 for j in range(len(preds)):
                     res.append(preds[j])
@@ -59,6 +66,14 @@ class STGDL(nn.Module):
                 res += preds[i]
 
         return self.scaler.inverse_transform(res)
+
+    def print_time_consumed(self):
+        total_time = sum(self.used_time)
+        partial_time = self.used_time / total_time * 100
+        s = "Time consumption ratio: "
+        for i in range(self.lm):
+            s += "({}: {:.2f}%)".format(self.models[i], partial_time[i])
+        logging.info(s)
 
     def calculate_loss(self, ys, preds, get_forward_loss=True):
         if self.use_model_pool:

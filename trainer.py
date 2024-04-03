@@ -65,13 +65,14 @@ class Trainer:
 
                     train_loss = self.model.calculate_loss(ys, preds, False)
 
-                    mets = self.eval(self.dataset.val_iter)
+                    mets = self.eval(self.dataset.val_iter, select=self.config.use_model_pool)
                     val_rmse, val_mape, val_mae = mets[0]
 
                     logging.info(
                         f"Ep {epoch}/{self.config.num_epoches}, iter {self.current_num / self.config.batch_size},"
                         f" train loss {round(train_loss.item(), 4)},"
                         f" val mae {round(val_mae, 4)} mape {round(val_mape, 4)} rmse {round(val_rmse, 4)}")
+                    self.model.print_time_consumed()
 
                     if val_mae < self.best_val_loss:
                         self.best_val_loss = val_mae
