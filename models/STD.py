@@ -69,6 +69,8 @@ class STGDL(nn.Module):
         return self.scaler.inverse_transform(res)
 
     def print_time_consumed(self):
+        if not self.use_model_pool:
+            return
         total_time = sum(self.used_time)
         partial_time = self.used_time / total_time * 100
         s = "Time consumption ratio: "
