@@ -14,7 +14,7 @@ from models.md_block import MDBlock
 
 
 class STDecomposition(Module):
-    def __init__(self, config: TrainingArguments, supports, scaler, decomposition_batch=None):
+    def __init__(self, config: TrainingArguments, supports, scaler, decomposition_batch):
         super(STDecomposition, self).__init__()
         # self.adj = supports[0]
         self.config = config

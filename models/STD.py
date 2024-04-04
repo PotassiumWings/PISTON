@@ -24,21 +24,21 @@ class STGDL(nn.Module):
         self.use_model_pool = config.use_model_pool
         self.stds = []
         self.used_time = None
+        self.decomposition_batch = DecompositionBatch(config.p, config.q)
         if self.use_model_pool:
             model_pool = config.model_pool
             self.models = model_pool.split(",")
-            self.decomposition_batch = DecompositionBatch(config.p, config.q)
             self.lm = len(self.models)
             for i in range(self.lm):
                 temp_config = copy.deepcopy(config)
                 temp_config.st_encoder = self.models[i]
                 temp_config.is_od_model = config.model_pool_od[i] == '1'
-                std = STDecomposition(temp_config, supports, scaler, )
+                std = STDecomposition(temp_config, supports, scaler, self.decomposition_batch)
                 self.stds.append(std)
                 self.add_module(f"std_{i}", std)
             self.used_time = np.zeros(self.lm + 1)
         else:
-            std = STDecomposition(config, supports, scaler)
+            std = STDecomposition(config, supports, scaler, self.decomposition_batch)
             self.stds.append(std)
             self.add_module(f"std", std)
 
@@ -50,11 +50,12 @@ class STGDL(nn.Module):
     def forward(self, x, trues):
         # x: NCVL
         # preds: tk*sk N L_o V V
+        self.decomposition_batch.init_batch()
+
         if self.use_model_pool:
             res = []
 
             start_time = datetime.now()
-            self.decomposition_batch.init_batch()
             self.decomposition_batch.get_data(x)
             self.used_time[-1] += (datetime.now() - start_time).total_seconds()
 
