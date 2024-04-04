@@ -8,12 +8,14 @@ from configs.MSDR_configs import MSDRConfig
 from configs.MTGNN_configs import MTGNNConfig
 from configs.STSSL_configs import STSSLConfig
 from configs.STGCN_configs import STGCNConfig
+from configs.AGCRN_configs import AGCRNConfig
 from configs.GEML_configs import GEMLConfig
 from configs.CSTN_configs import CSTNConfig
 from models.GraphWavenet.GraphWavenet import GraphWavenet
 from models.MSDR.MSDR import MSDR
 from models.MTGNN.MTGNN import MTGNN
 from models.STGCN.STGCN import STGCN
+from models.AGCRN.AGCRN import AGCRN
 from models.STSSL.STSSL import STSSL
 from models.GEML.GEML import GEML
 from models.CSTN.CSTN import CSTN
