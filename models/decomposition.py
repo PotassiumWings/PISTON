@@ -14,7 +14,7 @@ from models.md_block import MDBlock
 
 
 class STDecomposition(Module):
-    def __init__(self, config: TrainingArguments, supports, scaler):
+    def __init__(self, config: TrainingArguments, supports, scaler, decomposition_batch=None):
         super(STDecomposition, self).__init__()
         # self.adj = supports[0]
         self.config = config
@@ -25,6 +25,8 @@ class STDecomposition(Module):
         self.node_emb = []
         self.mds = []
         self.conv = []
+
+        self.decomposition_batch = decomposition_batch
 
         for i in range(self.tk):
             for j in range(self.sk):
@@ -42,7 +44,7 @@ class STDecomposition(Module):
 
     def forward(self, x, trues):
         # N L V V -> N V V L
-        x = self.decomposition(x)
+        x = self.decomposition_batch.get_data(x)
 
         pred = []
         for i in range(self.tk):
@@ -57,53 +59,8 @@ class STDecomposition(Module):
         # tksk N L_o V V
         return pred
 
-    def decomposition(self, x):
-        # x: N L V V -> N V V L
-        # x -> tk
-        x = x.permute(0, 2, 3, 1)
-
-        wavelet = pywt.Wavelet("haar")
-        # logging.info("wavedec start")
-        x = ptwt.wavedec(x, wavelet, mode='zero', level=self.tk - 1)
-        # logging.info("wavedec end")
-        x = x[::-1]
-
-        # x: [y1, y2, ..., ytk], y NVVl
-        res = []
-        for i in range(self.tk):
-            if self.sk == 1:
-                res.append(x[i])
-                continue
-
-            # logging.info("svd start")
-            u, sig, v = torch.svd(x[i].permute(0, 3, 1, 2))  # NlVV
-            # logging.info("svd end")
-            for j in range(self.sk - 1):
-                ui, sigi, vi = u[..., j:j + 1], sig[..., j:j + 1], v[..., j:j + 1]
-                # mat: NlVV
-                mat = torch.matmul(torch.matmul(ui, torch.diag_embed(sigi)), vi.transpose(-2, -1))
-                # N V V l
-                res.append(mat.permute(0, 2, 3, 1))
-
-            # residual term
-            mat = torch.matmul(torch.matmul(u[..., self.sk:], torch.diag_embed(sig[..., self.sk:])),
-                               v[..., self.sk:].transpose(-2, -1))
-            res.append(mat.permute(0, 2, 3, 1))
-        # res: tk sk  N V V l
-        return res
-
     def get_adj(self, node_emb):
         return F.softmax(F.relu(torch.mm(node_emb, node_emb.transpose(0, 1))), dim=1)
-
-    def get_flows(self, mat):
-        # mat: NClVV
-        # DEBUG 2: inflow outflow
-        inflow = mat.sum(-2)
-        outflow = mat.sum(-1)
-
-        # N 2C l V
-        flows = torch.cat([inflow, outflow], dim=1)
-        return flows.permute(0, 1, 3, 2)
 
     def get_forward_loss(self):
         res = 0

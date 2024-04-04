@@ -7,6 +7,7 @@ import numpy as np
 
 from configs.arguments import TrainingArguments
 from models import loss
+from models.decomposition_batch import DecompositionBatch
 from datetime import datetime
 from models.decomposition import STDecomposition
 from utils.normalize import Scaler
@@ -26,15 +27,16 @@ class STGDL(nn.Module):
         if self.use_model_pool:
             model_pool = config.model_pool
             self.models = model_pool.split(",")
+            self.decomposition_batch = DecompositionBatch(config.p, config.q)
             self.lm = len(self.models)
             for i in range(self.lm):
                 temp_config = copy.deepcopy(config)
                 temp_config.st_encoder = self.models[i]
                 temp_config.is_od_model = config.model_pool_od[i] == '1'
-                std = STDecomposition(temp_config, supports, scaler)
+                std = STDecomposition(temp_config, supports, scaler, )
                 self.stds.append(std)
                 self.add_module(f"std_{i}", std)
-            self.used_time = np.zeros(self.lm)
+            self.used_time = np.zeros(self.lm + 1)
         else:
             std = STDecomposition(config, supports, scaler)
             self.stds.append(std)
@@ -50,6 +52,12 @@ class STGDL(nn.Module):
         # preds: tk*sk N L_o V V
         if self.use_model_pool:
             res = []
+
+            start_time = datetime.now()
+            self.decomposition_batch.init_batch()
+            self.decomposition_batch.get_data(x)
+            self.used_time[-1] += (datetime.now() - start_time).total_seconds()
+
             for i in range(self.lm):
                 # logging.info(f"Proceeding {self.models[i]}...")
                 start_time = datetime.now()
@@ -76,6 +84,7 @@ class STGDL(nn.Module):
         s = "Time consumption ratio: "
         for i in range(self.lm):
             s += "({}: {:.2f}%)".format(self.models[i], partial_time[i])
+        s += "(Decom: {:.2f}%)".format(partial_time[-1])
         logging.info(s)
 
     def calculate_loss(self, ys, preds, get_forward_loss=True):
