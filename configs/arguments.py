@@ -32,6 +32,7 @@ class TrainingArguments(BaseModel):
     # for decomposing
     p: int = Field(2)
     q: int = Field(1)
+    avg_q: bool = Field(False)
     node_emb: int = Field(10)
 
     seed: int = Field(0)

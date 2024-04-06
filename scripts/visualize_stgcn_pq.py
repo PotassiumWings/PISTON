@@ -5,7 +5,7 @@ from scripts_utils import *
 f = open("logs_pq", "r", encoding="utf-8")
 result = parse_f(f, pattern="python app.py", features=["--p", "--q"], default=["1", "1"], result_pattern="Test:")
 
-N = 9
+N = 10
 res = [[0 for j in range(N)] for i in range(N)]
 for i in range(N):
     if result.get(str(i)) is None:

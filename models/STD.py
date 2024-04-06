@@ -24,7 +24,7 @@ class STGDL(nn.Module):
         self.use_model_pool = config.use_model_pool
         self.stds = []
         self.used_time = None
-        self.decomposition_batch = DecompositionBatch(config.p, config.q)
+        self.decomposition_batch = DecompositionBatch(config, config.p, config.q)
         if self.use_model_pool:
             model_pool = config.model_pool
             self.models = model_pool.split(",")
