@@ -8,14 +8,24 @@ class DecompositionBatch:
         self.data = None
         self.tk = p
         self.sk = q
+        self.data = None
+        self.lambdas = None
 
     def init_batch(self):
         self.data = None
+        self.lambdas = []
 
     def get_data(self, x):
         if self.data is None:
             self.decomposition(x)
         return self.data
+
+    def get_spatio_weight(self, t_ind, s_ind):
+        if s_ind == self.sk - 1:
+            return 1.0 / self.sk
+
+        lamb = self.lambdas[t_ind]
+        return lamb[..., s_ind].sum() / lamb[..., :self.sk - 2].sum() * (self.sk - 1) / self.sk
 
     def decomposition(self, x):
         # x: N L V V -> N V V L
@@ -37,6 +47,8 @@ class DecompositionBatch:
 
             # logging.info("svd start")
             u, sig, v = torch.svd(x[i].permute(0, 3, 1, 2))  # NlVV
+            self.lambdas.append(sig)
+
             # logging.info("svd end")
             for j in range(self.sk - 1):
                 ui, sigi, vi = u[..., j:j + 1], sig[..., j:j + 1], v[..., j:j + 1]

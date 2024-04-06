@@ -38,7 +38,7 @@ class STDecomposition(Module):
                 st_encoder = config.st_encoder
                 logging.info(f"{i} {j} ~ {st_encoder}")
 
-                md_block = MDBlock(copy.deepcopy(config), supports, i, j, st_encoder, scaler)
+                md_block = MDBlock(copy.deepcopy(config), supports, i, j, st_encoder, scaler, decomposition_batch)
                 self.mds.append(md_block)
                 self.add_module(f"{i}_{j}_md", md_block)
 

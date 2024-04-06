@@ -14,6 +14,7 @@ class TrainingArguments(BaseModel):
     c_in: int = Field(1)  # feature dim
     c_hid: int = Field(8)  # hidden dim
     c_out: int = Field(1)  # out dim
+    weighted_aggregate: bool = Field(False)
 
     batch_size: int = Field(32)
     early_stop_batch: int = Field(10000)

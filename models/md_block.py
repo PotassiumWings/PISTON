@@ -23,9 +23,11 @@ from models.abstract_st_encoder import AbstractSTEncoder
 
 
 class MDBlock(nn.Module):
-    def __init__(self, config: TrainingArguments, supports: list, temporal_index, spatio_index, st_encoder, scaler):
+    def __init__(self, config: TrainingArguments, supports: list, temporal_index, spatio_index,
+                 st_encoder, scaler, decomposition_batch):
         super(MDBlock, self).__init__()
         self.conv: AbstractSTEncoder
+        self.decomposition_batch = decomposition_batch
 
         origin_config = config
 
@@ -42,6 +44,9 @@ class MDBlock(nn.Module):
             self.adj_conv_back = nn.Parameter(torch.randn(config.c_hid, config.num_nodes), requires_grad=True)
             self.register_parameter(f"{temporal_index}_{spatio_index}_conv2", self.adj_conv_back)
 
+        self.temporal_index = temporal_index
+        self.spatio_index = spatio_index
+
         origin_input_len = config.input_len
         if config.p > 1:
             config.input_len //= 2
@@ -57,6 +62,7 @@ class MDBlock(nn.Module):
         # out:  N C_hid V L_out
 
         self.conv = globals()[config.st_encoder](config, supports, scaler)
+        self.config = config
 
     def forward(self, x, subgraph, trues):
         # x: N V V L
@@ -81,6 +87,20 @@ class MDBlock(nn.Module):
             y = y.permute(0, 2, 1, 3)
             # N V V L_o
             y = torch.einsum("nvcl,cw->nvwl", (y, self.adj_conv_back))
+
+        if self.config.weighted_aggregate:
+            temporal_weight = pow(0.5, self.temporal_index)
+            if self.temporal_index != self.config.p - 1:
+                temporal_weight /= 2
+
+            spatio_weight = self.decomposition_batch.get_spatio_weight(self.temporal_index, self.spatio_index)
+
+            weight = temporal_weight * spatio_weight
+
+            # logging.info(f"{self.temporal_index} {self.spatio_index} weight: "
+            #              f"{100*temporal_weight:.2f} {100*spatio_weight:.2f} "
+            #              f"{100*weight:.2f}")
+            y *= weight
 
         return y
 
