@@ -36,13 +36,14 @@ class DecompositionBatch:
         if self.config.squared_lambda:
             sig = sig.pow(2)
 
-        part_sum = sig.sum() / self.sk
+        sig_sum = sig.sum()
         for i in range(self.sk - 1):
             pointer = result[-1]
             cur_sum = 0
-            while cur_sum < part_sum:
+            while cur_sum < sig_sum / (self.sk - i):
                 cur_sum += sig[..., pointer].sum()
                 pointer += 1
+            sig_sum -= cur_sum
             result.append(pointer)
         result.append(V)
         self.avg_indexes = result
