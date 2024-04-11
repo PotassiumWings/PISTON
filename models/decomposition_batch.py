@@ -24,12 +24,18 @@ class DecompositionBatch:
         return self.data
 
     def calc_avg(self, sig):
+        # average split in spatial dimension
         if self.avg_indexes is not None:
             return self.avg_indexes
 
         # sig: N l V
         _, _, V = sig.shape
         result = [0]
+
+        # squared
+        if self.config.squared_lambda:
+            sig = sig.pow(2)
+
         part_sum = sig.sum() / self.sk
         for i in range(self.sk - 1):
             pointer = result[-1]
@@ -48,6 +54,9 @@ class DecompositionBatch:
             return 1.0 / self.sk
 
         lamb = self.lambdas[t_ind]
+        if self.config.squared_lambda:
+            lamb = lamb.pow(2)
+
         return lamb[..., s_ind].sum() / lamb[..., :self.sk - 2].sum() * (self.sk - 1) / self.sk
 
     def decomposition(self, x):

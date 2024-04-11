@@ -33,6 +33,7 @@ class TrainingArguments(BaseModel):
     p: int = Field(2)
     q: int = Field(1)
     avg_q: bool = Field(False)
+    squared_lambda: bool = Field(False)
     node_emb: int = Field(10)
 
     seed: int = Field(0)
