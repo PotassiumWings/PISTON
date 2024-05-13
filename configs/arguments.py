@@ -2,19 +2,15 @@ from pydantic import BaseModel, Field
 
 
 class TrainingArguments(BaseModel):
-    dataset_name: str = Field("NYC-TOD")
+    dataset_name: str = Field("NYC-TOD4")
     # data feature
     input_len: int = Field(48)  # Time step len
     output_len: int = Field(1)  # next step prediction, not changeable
 
     num_nodes: int = Field(75)
-    height: int = Field(15)
-    width: int = Field(5)
 
     c_in: int = Field(1)  # feature dim
-    c_hid: int = Field(8)  # hidden dim
     c_out: int = Field(1)  # out dim
-    weighted_aggregate: bool = Field(False)
 
     batch_size: int = Field(32)
     early_stop_batch: int = Field(10000)
@@ -30,19 +26,21 @@ class TrainingArguments(BaseModel):
     scaler: str = Field("Standard")
 
     # for decomposing
+    random_svd_k: int = Field(15)
     p: int = Field(2)
-    q: int = Field(1)
-    avg_q: bool = Field(False)
-    squared_lambda: bool = Field(False)
-    node_emb: int = Field(10)
+    q: int = Field(5)
+
+    # correlation encoder
+    adp_emb: int = Field(10)  # adaptive graph embedding length
+    layers: int = Field(4)
+    d_model: int = Field(16)
+    n_head: int = Field(2)
+    d_encoder: int = Field(16)
+    d_ff: int = Field(16)
+    order: int = Field(2)  # graph convolution cheby order
 
     seed: int = Field(0)
     load: str = Field("")
+    dropout: float = Field(0.2)
 
     mae_mask: int = Field(5)
-    st_encoder: str = Field("STGCN")
-    is_od_model: bool = Field(False)
-
-    model_pool: str = Field("STGCN,GraphWavenet,STSSL,MTGNN")
-    model_pool_od: str = Field("0000")
-    use_model_pool: bool = Field(False)

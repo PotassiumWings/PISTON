@@ -44,7 +44,7 @@ class Trainer:
             for i, (x, y) in enumerate(train_iter):
                 # N L V V
                 ys.append(y)
-                pred = self.model(x, y)
+                pred = self.model(x)
                 preds.append(pred)
 
                 loss = self.model.calculate_loss(y, pred)
@@ -63,7 +63,7 @@ class Trainer:
                     ys, preds = torch.cat(ys, dim=-4), torch.cat(preds, dim=-4)
                     self.model.eval()
 
-                    train_loss = self.model.calculate_loss(ys, preds, False)
+                    train_loss = self.model.calculate_loss(ys, preds)
 
                     mets = self.eval(self.dataset.val_iter, select=self.config.use_model_pool)
                     val_rmse, val_mape, val_mae = mets[0]
@@ -112,7 +112,7 @@ class Trainer:
             for i, (x, y) in enumerate(data_iter):
                 xs.append(x.cpu())
                 trues.append(y.cpu())  # NCVL'
-                pred = self.model(x, y)
+                pred = self.model(x)
                 preds.append(pred.cpu())  # PNCVL'
 
         preds = torch.cat(preds, dim=-4)

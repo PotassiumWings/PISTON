@@ -8,7 +8,7 @@ import torch
 
 from configs.arguments import TrainingArguments
 from dataset.processor import MyDataset
-from models.STD import STGDL
+from models.STD import STDOD
 from trainer import Trainer
 from utils.file_utils import ensure_dir
 
@@ -25,7 +25,7 @@ def main(config: TrainingArguments):
         supports = [torch.Tensor(support).to(device) for support in dataset.supports]
 
         logging.info("Loading model...")
-        model = STGDL(config, supports, dataset.scaler, device).to(device)
+        model = STDOD(config, supports).to(device)
         print_parameter_count(model)
         trainer = Trainer(config, model, dataset, time)
 
