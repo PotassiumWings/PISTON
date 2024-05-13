@@ -38,6 +38,8 @@ def parse_f(f, pattern: str, features: list, default: list, result_pattern: str)
     for line in f:
         # case 1: python app.py --arguments
         if pattern in line:
+            if not "GraphWavenet" in line:
+                continue
             current_features = default.copy()
             args = line.strip("\n").split(" ")
             for i in range(len(args)):
