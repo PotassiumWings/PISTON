@@ -47,7 +47,7 @@ class Trainer:
                 pred = self.model(x)
                 preds.append(pred)
 
-                loss = self.model.calculate_loss(y, pred)
+                loss = self.model.calculate_loss(pred, y)
                 loss.backward()
 
                 self.check_step(batch_size=x.size(0))
@@ -63,16 +63,15 @@ class Trainer:
                     ys, preds = torch.cat(ys, dim=-4), torch.cat(preds, dim=-4)
                     self.model.eval()
 
-                    train_loss = self.model.calculate_loss(ys, preds)
+                    train_loss = self.model.calculate_loss(preds, ys)
 
-                    mets = self.eval(self.dataset.val_iter, select=self.config.use_model_pool)
+                    mets = self.eval(self.dataset.val_iter)
                     val_rmse, val_mape, val_mae = mets[0]
 
                     logging.info(
                         f"Ep {epoch}/{self.config.num_epoches}, iter {self.current_num / self.config.batch_size},"
                         f" train loss {round(train_loss.item(), 4)},"
                         f" val mae {round(val_mae, 4)} mape {round(val_mape, 4)} rmse {round(val_rmse, 4)}")
-                    self.model.print_time_consumed()
 
                     if val_mae < self.best_val_loss:
                         self.best_val_loss = val_mae
@@ -93,13 +92,8 @@ class Trainer:
     def visualize(self, dir_name):
         self.model.visualize(dir_name)
 
-    def eval(self, data_iter, select=False):
+    def eval(self, data_iter):
         def metrics(pred, true):
-            if len(pred.shape) != len(true.shape):  # use model pool
-                assert len(pred.shape) == len(true.shape) + 1 == 5
-                assert pred.shape[1:] == true.shape
-                true = true.unsqueeze(0)
-                true = true.broadcast_to(pred.shape)
             return loss.rmse_torch(pred, true, self.config.mae_mask).item(), \
                 loss.mape_torch(pred, true, self.config.mae_mask).item(), \
                 loss.mae_torch(pred, true, self.config.mae_mask).item()
@@ -111,31 +105,18 @@ class Trainer:
             # data_iter.shuffle()
             for i, (x, y) in enumerate(data_iter):
                 xs.append(x.cpu())
-                trues.append(y.cpu())  # NCVL'
+                trues.append(y.cpu())  # NCLVV'
                 pred = self.model(x)
-                preds.append(pred.cpu())  # PNCVL'
+                preds.append(pred.cpu())  # NCLVV'
 
-        preds = torch.cat(preds, dim=-4)
-        trues = torch.cat(trues, dim=-4)
-
-        if select:
-            sub_modules = self.config.p * self.config.q
-            for i in range(sub_modules):
-                maes = []
-                for j in range(self.model.lm):
-                    preds_j = preds[j * sub_modules + i]
-                    mae = loss.mae_torch(preds_j, trues, self.config.mae_mask).item()
-                    maes.append([mae, self.model.models[j]])
-                maes.sort(reverse=False, key=lambda ls: ls[0])
-                logging.info(f"{i}: " + str(maes))
-
-        # xs = torch.cat(xs, dim=0)
+        preds = torch.cat(preds, dim=-5)
+        trues = torch.cat(trues, dim=-5)
 
         ret = [metrics(preds, trues)]
         return ret
 
     def test(self):
-        metrics = self.eval(self.dataset.test_iter, select=self.config.use_model_pool)
+        metrics = self.eval(self.dataset.test_iter)
         test_rmse, test_mape, test_mae = metrics[0]
         logging.info(f"Test: rmse {test_rmse}, mae {test_mae}, mape {test_mape}")
         for i in range(len(metrics) - 1):

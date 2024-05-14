@@ -43,4 +43,4 @@ class TrainingArguments(BaseModel):
     load: str = Field("")
     dropout: float = Field(0.2)
 
-    mae_mask: int = Field(5)
+    mae_mask: int = Field(0)

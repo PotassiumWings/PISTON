@@ -101,14 +101,14 @@ class MultiHeadAttention(nn.Module):
         result = self.dropout(self.fc(result))
 
         # Add & Norm
-        result += residual
+        result = result + residual
         result = self.layer_norm(result)
 
         # Feed-Forward
         ff_res = self.ff(result)
 
         # Add & Norm
-        result += self.dropout(ff_res)
+        result = result + self.dropout(ff_res)
         result = self.layer_norm(result)
         return result
 
@@ -365,9 +365,10 @@ class SelfSuperviseHead(nn.Module):
 
 
 class STDOD(nn.Module):
-    def __init__(self, config: TrainingArguments, supports):
+    def __init__(self, config: TrainingArguments, supports, scaler):
         super(STDOD, self).__init__()
         self.supports = supports
+        self.scaler = scaler
         self.loss = loss.masked_mae_loss(config.mae_mask)
 
         input_len = config.input_len
@@ -398,10 +399,10 @@ class STDOD(nn.Module):
         # pred: N C_out L V V
         pred = self.prediction_head(embedding)
         # reconstruct = self.self_supervise_head(embedding)
-        return pred
+        return self.scaler.inverse_transform(pred)
 
     def calculate_loss(self, pred, true):
-        return self.loss(pred, true)
+        return self.loss(pred.flatten(), true.flatten())
 
 
 def calc_sym(adj):

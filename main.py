@@ -25,7 +25,7 @@ def main(config: TrainingArguments):
         supports = [torch.Tensor(support).to(device) for support in dataset.supports]
 
         logging.info("Loading model...")
-        model = STDOD(config, supports).to(device)
+        model = STDOD(config, supports, dataset.scaler).to(device)
         print_parameter_count(model)
         trainer = Trainer(config, model, dataset, time)
 

@@ -50,6 +50,7 @@ class MyDataset(AbstractDataset):
         if define_scaler:
             self.scaler = get_scaler(self.config.scaler, x)
         x = self.scaler.transform(x)
+        # y: N C L V V
         return MyDatasetIterator((x, y), self.config.batch_size, self.device, shuffle), x
 
 
@@ -89,7 +90,7 @@ class MyDatasetIterator(object):
                       self.index * self.batch_size: min((self.index + 1) * self.batch_size, len(self.batches))]
             self.index += 1
             x, y = self._to_tensor(batches)
-            return x, y
+            return x, y.unsqueeze(1)
 
     def __iter__(self):
         return self
