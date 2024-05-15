@@ -394,6 +394,7 @@ class STDOD(nn.Module):
         # x: N L V V
         # decomposed: tk*sk N V V L
         decomposed = self.decomposition_block(x)
+        decomposed = self.scaler.transform(decomposed)
         # embedding: N V L tk sk C
         embedding = self.encoder(decomposed, self.supports)
         # pred: N C_out L V V

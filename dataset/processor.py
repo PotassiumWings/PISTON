@@ -49,7 +49,7 @@ class MyDataset(AbstractDataset):
 
         if define_scaler:
             self.scaler = get_scaler(self.config.scaler, x)
-        x = self.scaler.transform(x)
+        # x = self.scaler.transform(x)
         # y: N C L V V
         return MyDatasetIterator((x, y), self.config.batch_size, self.device, shuffle), x
 
