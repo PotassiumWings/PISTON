@@ -386,7 +386,7 @@ class STDOD(nn.Module):
                                           d_out=config.d_encoder)
         logging.info("Prediction Head")
         self.prediction_head = PredictionHead(sk=config.q, tk=config.p, num_nodes=config.num_nodes,
-                                              d_model=config.d_model, c_out=config.c_out, input_len=config.input_len,
+                                              d_model=config.d_encoder, c_out=config.c_out, input_len=config.input_len,
                                               output_len=config.output_len)
         # self.self_supervise_head = SelfSuperviseHead()
 

@@ -34,9 +34,9 @@ class TrainingArguments(BaseModel):
     adp_emb: int = Field(10)  # adaptive graph embedding length
     layers: int = Field(4)
     d_model: int = Field(16)
+    d_ff: int = Field(16)
     n_head: int = Field(2)
     d_encoder: int = Field(16)
-    d_ff: int = Field(16)
     order: int = Field(2)  # graph convolution cheby order
 
     seed: int = Field(0)
