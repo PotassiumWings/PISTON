@@ -255,8 +255,8 @@ class Normalization(nn.Module):
 
 
 class CorrelationEncoder(nn.Module):
-    def __init__(self, input_len, num_nodes, tk, sk, layers, adp_emb, n_heads, d_out, d_model, d_ff, dropout,
-                 support_len, order):
+    def __init__(self, input_len, num_nodes, tk, sk, layers, adp_emb, n_heads, d_out, d_model, d_ff,
+                 d_encoder, d_encoder_ff, dropout, support_len, order):
         super(CorrelationEncoder, self).__init__()
         self.tk = tk
         self.sk = sk
@@ -264,6 +264,7 @@ class CorrelationEncoder(nn.Module):
         self.input_len = input_len
         self.layers = layers
         self.d_model = d_model
+        self.d_out = d_out
         self.start_linear = nn.Linear(num_nodes, d_model)
         self.position_embedding = nn.Parameter(torch.randn(input_len, tk, sk, d_model))
         self.att_t_fil = nn.ModuleList()
@@ -290,7 +291,7 @@ class CorrelationEncoder(nn.Module):
         self.output = nn.Conv2d(in_channels=d_model * sk * tk, out_channels=d_out * sk * tk,
                                 kernel_size=(1, 1), bias=True)
 
-        self.freq_attention = FreqAttention(tk=tk, sk=sk, d_model=d_model, d_ff=d_ff, dropout=dropout,
+        self.freq_attention = FreqAttention(tk=tk, sk=sk, d_model=d_encoder, d_ff=d_encoder_ff, dropout=dropout,
                                             n_heads=n_heads, num_nodes=num_nodes, input_len=input_len)
 
     def forward(self, x, supports):
@@ -324,7 +325,7 @@ class CorrelationEncoder(nn.Module):
         x = F.relu(self.mlp(x))
         output = self.output(x)  # N tk*sk*C V L
 
-        output = output.permute(0, 2, 3, 1).reshape(-1, self.num_nodes, self.input_len, self.tk, self.sk, self.d_model)
+        output = output.permute(0, 2, 3, 1).reshape(-1, self.num_nodes, self.input_len, self.tk, self.sk, self.d_out)
 
         # output, freq_attn: N V L tk sk C
         freq_attn = self.freq_attention(output)
@@ -388,6 +389,7 @@ class STDOD(nn.Module):
         self.encoder = CorrelationEncoder(input_len=config.input_len, num_nodes=config.num_nodes, sk=config.q,
                                           tk=config.p, layers=config.layers, n_heads=config.n_head,
                                           adp_emb=config.adp_emb, d_model=config.d_model, d_ff=config.d_ff,
+                                          d_encoder=config.d_encoder, d_encoder_ff=config.d_encoder,  # same
                                           dropout=config.dropout, support_len=len(supports), order=config.order,
                                           d_out=config.d_encoder)
         logging.info("Prediction Head")
