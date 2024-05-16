@@ -26,6 +26,7 @@ class TrainingArguments(BaseModel):
     scaler: str = Field("Standard")
 
     # for decomposing
+    rsvd: bool = Field(True)
     random_svd_k: int = Field(15)
     p: int = Field(2)
     q: int = Field(5)

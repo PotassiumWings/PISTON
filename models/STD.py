@@ -12,8 +12,9 @@ from utils.normalize import Scaler
 
 
 class DecompositionBlock(nn.Module):
-    def __init__(self, input_len, sk, tk, n, random_svd_k):
+    def __init__(self, rsvd, input_len, sk, tk, n, random_svd_k):
         super(DecompositionBlock, self).__init__()
+        self.rsvd = rsvd
         self.tk = tk
         self.sk = sk
         self.n = n
@@ -23,6 +24,10 @@ class DecompositionBlock(nn.Module):
         self.p = nn.Parameter(torch.randn(self.n, self.k), requires_grad=True)
 
     def svd(self, x):
+        if not self.rsvd:
+            u, sig, v = torch.svd(x)
+            return u, sig, v
+
         # x: N L V V
         z = x @ self.p  # z: N L V k
         q, _ = torch.linalg.qr(z)  # q: N L V k
@@ -377,7 +382,8 @@ class STDOD(nn.Module):
 
         logging.info("Decomposition Block")
         self.decomposition_block = DecompositionBlock(input_len=config.input_len, sk=config.q, tk=config.p,
-                                                      n=config.num_nodes, random_svd_k=config.random_svd_k)
+                                                      n=config.num_nodes, random_svd_k=config.random_svd_k,
+                                                      rsvd=config.rsvd)
         logging.info("Correlation Encoder")
         self.encoder = CorrelationEncoder(input_len=config.input_len, num_nodes=config.num_nodes, sk=config.q,
                                           tk=config.p, layers=config.layers, n_heads=config.n_head,
