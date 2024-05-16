@@ -222,12 +222,12 @@ class FreqAttention(nn.Module):
 
     def forward(self, x):
         # x: N V L tk sk C -> NV tk*sk*L C
-        x = torch.einsum('nvltsc->nvtslc', x)
-        x = x.reshape(-1, self.tk * self.sk * self.input_len, self.d_model)
+        # x = torch.einsum('nvltsc->nvtslc', x)
+        x = x.reshape(-1, self.tk * self.sk, self.d_model)
 
         x = self.attention(x)
-        x = x.reshape(-1, self.num_nodes, self.tk, self.sk, self.input_len, self.d_model)
-        x = torch.einsum('nvtslc->nvltsc', x)
+        x = x.reshape(-1, self.num_nodes, self.input_len, self.tk, self.sk, self.d_model)
+        # x = torch.einsum('nvtslc->nvltsc', x)
         return x
 
 
