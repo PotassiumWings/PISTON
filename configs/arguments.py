@@ -31,6 +31,9 @@ class TrainingArguments(BaseModel):
     p: int = Field(2)
     q: int = Field(5)
 
+    # mask percent
+    mask_percent: float = Field(0.3)
+
     # correlation encoder
     adp_emb: int = Field(10)  # adaptive graph embedding length
     layers: int = Field(4)

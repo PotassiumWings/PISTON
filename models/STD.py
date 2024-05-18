@@ -374,9 +374,67 @@ class PredictionHead(nn.Module):
         return x
 
 
-class SelfSuperviseHead(nn.Module):
+class Mask(nn.Module):
+    def __init__(self, mask_percent):
+        super(Mask, self).__init__()
+        self.mask_percent = mask_percent
+
+    def forward(self, x):
+        # tk*sk N V V L
+        freq, batch_size, num_nodes, _, length = x.shape
+        device = x.device
+        assert x.shape[3] == num_nodes
+
+        mask_len = int(self.mask_percent * freq)
+        keep_len = freq - mask_len
+
+        # random choose {mask_len} elements in each node pair to mask the entire input len
+        random_data = torch.rand(freq, batch_size, num_nodes, num_nodes, device=device)
+        ids_shuffle = torch.argsort(random_data, dim=0)
+        ids_restore = torch.argsort(ids_shuffle, dim=0)
+
+        mask_shuffle = torch.zeros([mask_len, batch_size, num_nodes, num_nodes, length], device=device)
+        keep_shuffle = torch.ones([keep_len, batch_size, num_nodes, num_nodes, length], device=device)
+        total_mask_shuffle = torch.cat([mask_shuffle, keep_shuffle], dim=0)
+
+        total_restore = ids_restore.unsqueeze(-1).repeat(1, 1, 1, 1, length)
+        mask = torch.gather(total_mask_shuffle, 0, total_restore)
+        return x * mask
+
+
+class RecoverHead(nn.Module):
+    def __init__(self, tk, sk, d_model, num_nodes):
+        super(RecoverHead, self).__init__()
+        self.sk = sk
+        self.tk = tk
+        self.d_model = d_model
+        self.num_nodes = num_nodes
+        self.linear = nn.Linear(in_features=tk * sk * d_model,
+                                out_features=tk * sk * num_nodes)
+
+    def forward(self, x):
+        input_len = x.shape[2]
+
+        # x: N V L t s C -> N V L tsC
+        x = x.view(-1, self.num_nodes, input_len, self.tk * self.sk * self.d_model)
+
+        # N V L tsV
+        x = self.linear(x)
+
+        # N V L t s U
+        x = x.view(-1, self.num_nodes, input_len, self.tk, self.sk, self.num_nodes)
+
+        # t s N V U L
+        x = torch.einsum('nvltsu->tsnvul', x)
+
+        # ts N V U L
+        x = x.view(self.tk * self.sk, -1, self.num_nodes, self.num_nodes, input_len)
+        return x
+
+
+class ContrastiveHead(nn.Module):
     def __init__(self):
-        super(SelfSuperviseHead, self).__init__()
+        super(ContrastiveHead, self).__init__()
         pass
 
 
@@ -398,6 +456,9 @@ class STDOD(nn.Module):
         self.decomposition_block = DecompositionBlock(input_len=config.input_len, sk=config.q, tk=config.p,
                                                       n=config.num_nodes, random_svd_k=config.random_svd_k,
                                                       rsvd=config.rsvd)
+
+        self.mask = Mask(mask_percent=config.mask_percent)
+
         logging.info("Correlation Encoder")
         self.encoder = CorrelationEncoder(input_len=config.input_len, num_nodes=config.num_nodes, sk=config.q,
                                           tk=config.p, layers=config.layers, n_heads=config.n_head,
@@ -409,9 +470,12 @@ class STDOD(nn.Module):
         self.prediction_head = PredictionHead(sk=config.q, tk=config.p, num_nodes=config.num_nodes,
                                               d_model=config.d_encoder, c_out=config.c_out, input_len=config.input_len,
                                               output_len=config.output_len, traditional=config.tradition_problem)
-        # self.self_supervise_head = SelfSuperviseHead()
+        self.recover_head = RecoverHead(sk=config.q, tk=config.p, num_nodes=config.num_nodes, d_model=config.d_encoder)
+        self.contrastive_head = ContrastiveHead()
+        self.self_supervised_loss = 0
 
     def forward(self, x):
+        self.self_supervised_loss = 0
         if self.transform_start_block is not None:
             x = self.transform_start_block(x)  # N L V C -> N L V V
 
@@ -421,15 +485,24 @@ class STDOD(nn.Module):
         if self.transform_start_block is None:
             decomposed = self.scaler.transform(decomposed)
 
+        masked_decomposed = self.mask(decomposed)
+
         # embedding: N V L tk sk C
         embedding = self.encoder(decomposed, self.supports)
+        embedding_masked = self.encoder(masked_decomposed, self.supports)
+
         # pred: N C_out L V V
         pred = self.prediction_head(embedding)
+        # recover: tk*sk N V V L
+        recover = self.recover_head(embedding_masked)
+
+        self.self_supervised_loss += loss.mae_torch(recover, decomposed)
+
         # reconstruct = self.self_supervise_head(embedding)
         return self.scaler.inverse_transform(pred)
 
     def calculate_loss(self, pred, true):
-        return self.loss(pred.flatten(), true.flatten())
+        return self.loss(pred.flatten(), true.flatten()) + self.self_supervised_loss
 
 
 def calc_sym(adj):
