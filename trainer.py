@@ -42,6 +42,8 @@ class Trainer:
             ys, preds = [], []
             jump_flag = False
             for i, (x, y) in enumerate(train_iter):
+                if self.config.tradition_problem:
+                    y = y.squeeze(1)
                 # N L V V
                 ys.append(y)
                 pred = self.model(x)
@@ -104,13 +106,15 @@ class Trainer:
         with torch.no_grad():
             # data_iter.shuffle()
             for i, (x, y) in enumerate(data_iter):
+                if self.config.tradition_problem:
+                    y = y.squeeze(1)
                 xs.append(x.cpu())
                 trues.append(y.cpu())  # NCLVV'
                 pred = self.model(x)
                 preds.append(pred.cpu())  # NCLVV'
 
-        preds = torch.cat(preds, dim=-5)
-        trues = torch.cat(trues, dim=-5)
+        preds = torch.cat(preds, dim=0)
+        trues = torch.cat(trues, dim=0)
 
         ret = [metrics(preds, trues)]
         return ret

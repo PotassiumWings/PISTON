@@ -333,7 +333,7 @@ class CorrelationEncoder(nn.Module):
 
 
 class PredictionHead(nn.Module):
-    def __init__(self, sk, tk, d_model, num_nodes, c_out, input_len, output_len):
+    def __init__(self, sk, tk, d_model, num_nodes, c_out, input_len, output_len, traditional):
         super(PredictionHead, self).__init__()
         self.sk = sk
         self.tk = tk
@@ -342,9 +342,16 @@ class PredictionHead(nn.Module):
         self.input_len = input_len
         self.output_len = output_len
         self.d_model = d_model
-        self.linear = nn.Conv2d(in_channels=d_model * sk * tk * input_len,
-                                out_channels=num_nodes * c_out * output_len,
-                                kernel_size=(1, 1), bias=True)
+
+        self.traditional = traditional
+        if traditional:
+            self.linear = nn.Conv2d(in_channels=d_model * sk * tk * input_len,
+                                    out_channels=c_out * output_len,
+                                    kernel_size=(1, 1), bias=True)
+        else:
+            self.linear = nn.Conv2d(in_channels=d_model * sk * tk * input_len,
+                                    out_channels=num_nodes * c_out * output_len,
+                                    kernel_size=(1, 1), bias=True)
 
     def forward(self, x):
         # x: N V L tk sk C
@@ -356,9 +363,12 @@ class PredictionHead(nn.Module):
         # N C" V 1
         x = self.linear(x)
 
-        x = x.reshape(-1, self.num_nodes, self.c_out, self.output_len, self.num_nodes)
-
-        x = torch.einsum('nuclv->nclvu', x)
+        if self.traditional:
+            x = x.reshape(-1, self.c_out, self.output_len, self.num_nodes)
+            x = torch.einsum('nclv->nlvc', x)
+        else:
+            x = x.reshape(-1, self.num_nodes, self.c_out, self.output_len, self.num_nodes)
+            x = torch.einsum('nuclv->nclvu', x)
 
         # x: N C L V V
         return x
@@ -381,6 +391,9 @@ class STDOD(nn.Module):
         if config.p > 1:
             input_len //= 2
 
+        self.transform_start_block = nn.Linear(config.origin_c_in, config.num_nodes) \
+            if config.tradition_problem else None
+
         logging.info("Decomposition Block")
         self.decomposition_block = DecompositionBlock(input_len=config.input_len, sk=config.q, tk=config.p,
                                                       n=config.num_nodes, random_svd_k=config.random_svd_k,
@@ -395,14 +408,19 @@ class STDOD(nn.Module):
         logging.info("Prediction Head")
         self.prediction_head = PredictionHead(sk=config.q, tk=config.p, num_nodes=config.num_nodes,
                                               d_model=config.d_encoder, c_out=config.c_out, input_len=config.input_len,
-                                              output_len=config.output_len)
+                                              output_len=config.output_len, traditional=config.tradition_problem)
         # self.self_supervise_head = SelfSuperviseHead()
 
     def forward(self, x):
+        if self.transform_start_block is not None:
+            x = self.transform_start_block(x)  # N L V C -> N L V V
+
         # x: N L V V
         # decomposed: tk*sk N V V L
         decomposed = self.decomposition_block(x)
-        decomposed = self.scaler.transform(decomposed)
+        if self.transform_start_block is None:
+            decomposed = self.scaler.transform(decomposed)
+
         # embedding: N V L tk sk C
         embedding = self.encoder(decomposed, self.supports)
         # pred: N C_out L V V

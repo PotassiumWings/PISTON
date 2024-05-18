@@ -45,3 +45,8 @@ class TrainingArguments(BaseModel):
     dropout: float = Field(0.2)
 
     mae_mask: int = Field(0)
+
+    # for traffic forecasting
+    tradition_problem: bool = Field(False)
+    origin_c_in: int = Field(2)
+
