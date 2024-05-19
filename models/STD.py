@@ -433,9 +433,28 @@ class RecoverHead(nn.Module):
 
 
 class ContrastiveHead(nn.Module):
-    def __init__(self):
+    def __init__(self, sk, tk, num_nodes):
         super(ContrastiveHead, self).__init__()
-        pass
+        self.sk = sk
+        self.tk = tk
+        self.num_nodes = num_nodes
+
+    def forward(self, x):
+        # x: N V L t s C
+        input_len = x.shape[2]
+        d_model = x.shape[-1]
+
+        result_loss = 0
+        for i in range(self.tk):
+            # N V L s C
+            h = x[:, :, :, i, :, :]
+            # N L s C -> N s LC -> N V s LC
+            h_mean = torch.mean(h, 1).permute(0, 2, 1, 3).reshape(-1, self.sk, input_len * d_model)
+            h_mean = h_mean.unsqueeze(1).repeat(1, self.num_nodes)
+
+            logits_pred = self.linear(h_mean, )
+
+        return result_loss
 
 
 class STDOD(nn.Module):
@@ -457,7 +476,11 @@ class STDOD(nn.Module):
                                                       n=config.num_nodes, random_svd_k=config.random_svd_k,
                                                       rsvd=config.rsvd)
 
-        self.mask = Mask(mask_percent=config.mask_percent)
+        self.recover = config.recover
+        if config.recover:
+            self.mask = Mask(mask_percent=config.mask_percent)
+            self.recover_head = RecoverHead(sk=config.q, tk=config.p, num_nodes=config.num_nodes,
+                                            d_model=config.d_encoder)
 
         logging.info("Correlation Encoder")
         self.encoder = CorrelationEncoder(input_len=config.input_len, num_nodes=config.num_nodes, sk=config.q,
@@ -470,8 +493,7 @@ class STDOD(nn.Module):
         self.prediction_head = PredictionHead(sk=config.q, tk=config.p, num_nodes=config.num_nodes,
                                               d_model=config.d_encoder, c_out=config.c_out, input_len=config.input_len,
                                               output_len=config.output_len, traditional=config.tradition_problem)
-        self.recover_head = RecoverHead(sk=config.q, tk=config.p, num_nodes=config.num_nodes, d_model=config.d_encoder)
-        self.contrastive_head = ContrastiveHead()
+        # self.contrastive_head = ContrastiveHead()
         self.self_supervised_loss = 0
 
     def forward(self, x):
@@ -485,20 +507,19 @@ class STDOD(nn.Module):
         if self.transform_start_block is None:
             decomposed = self.scaler.transform(decomposed)
 
-        masked_decomposed = self.mask(decomposed)
-
         # embedding: N V L tk sk C
         embedding = self.encoder(decomposed, self.supports)
-        embedding_masked = self.encoder(masked_decomposed, self.supports)
+
+        if self.recover:
+            masked_decomposed = self.mask(decomposed)
+            embedding_masked = self.encoder(masked_decomposed, self.supports)
+            # recover: tk*sk N V V L
+            recover = self.recover_head(embedding_masked)
+            self.self_supervised_loss += loss.mae_torch(recover, decomposed)
 
         # pred: N C_out L V V
         pred = self.prediction_head(embedding)
-        # recover: tk*sk N V V L
-        recover = self.recover_head(embedding_masked)
 
-        self.self_supervised_loss += loss.mae_torch(recover, decomposed)
-
-        # reconstruct = self.self_supervise_head(embedding)
         return self.scaler.inverse_transform(pred)
 
     def calculate_loss(self, pred, true):

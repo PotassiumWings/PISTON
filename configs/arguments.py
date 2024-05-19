@@ -33,6 +33,7 @@ class TrainingArguments(BaseModel):
 
     # mask percent
     mask_percent: float = Field(0.3)
+    recover: bool = Field(False)
 
     # correlation encoder
     adp_emb: int = Field(10)  # adaptive graph embedding length
