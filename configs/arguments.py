@@ -32,6 +32,7 @@ class TrainingArguments(BaseModel):
     q: int = Field(5)
 
     # mask percent
+    mask: bool = Field(False)
     mask_percent: float = Field(0.3)
     recover: bool = Field(False)
 

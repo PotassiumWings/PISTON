@@ -477,8 +477,10 @@ class STDOD(nn.Module):
                                                       rsvd=config.rsvd)
 
         self.recover = config.recover
+        self.do_mask = config.mask
         if config.recover:
-            self.mask = Mask(mask_percent=config.mask_percent)
+            if config.mask:
+                self.mask = Mask(mask_percent=config.mask_percent)
             self.recover_head = RecoverHead(sk=config.q, tk=config.p, num_nodes=config.num_nodes,
                                             d_model=config.d_encoder)
 
@@ -511,7 +513,10 @@ class STDOD(nn.Module):
         embedding = self.encoder(decomposed, self.supports)
 
         if self.recover:
-            masked_decomposed = self.mask(decomposed)
+            masked_decomposed = decomposed
+            if self.do_mask:
+                masked_decomposed = self.mask(decomposed)
+
             embedding_masked = self.encoder(masked_decomposed, self.supports)
             # recover: tk*sk N V V L
             recover = self.recover_head(embedding_masked)
