@@ -448,18 +448,17 @@ class ContrastiveHead(nn.Module):
         bs = x.shape[0]
 
         result_loss = 0
-        time_indices = torch.Tensor(range(0, self.tk))
-        spatial_indices = torch.Tensor(range(0, self.sk))
+        time_indices = torch.tensor(range(0, self.tk), device=x.device)
+        spatial_indices = torch.tensor(range(0, self.sk), device=x.device)
 
         # N' V 1
-        real_logits = torch.cat((torch.ones(self.sk + self.tk - 2 * bs, self.num_nodes, 1),
-                                 torch.zeros((self.sk - 1) * (self.tk - 1) * bs, self.num_nodes, 1)), dim=0)
+        real_logits = torch.cat((torch.ones((self.sk + self.tk - 2) * bs, self.num_nodes, 1, device=x.device),
+                                 torch.zeros((self.sk - 1) * (self.tk - 1) * bs, self.num_nodes, 1, device=x.device)),
+                                dim=0)
         for i in range(self.tk):
             for j in range(self.sk):
                 tid = torch.cat((time_indices[:i], time_indices[i + 1:]))
                 sid = torch.cat((spatial_indices[:j], spatial_indices[j + 1:]))
-                import pdb
-                pdb.set_trace()
 
                 # N V L C
                 h = x[:, :, :, i, j, :].reshape(-1, self.num_nodes, self.input_len * self.d_model)
@@ -478,7 +477,8 @@ class ContrastiveHead(nn.Module):
                                                  .reshape(-1, self.num_nodes, self.d_model * self.input_len)
 
                 # N' V 1
-                pred = torch.cat((self.discriminator(h, positive_sample), self.discriminator(h, negative_sample)))
+                pred = torch.cat((self.discriminator(h.repeat(self.sk + self.tk - 2, 1, 1), positive_sample),
+                                  self.discriminator(h.repeat((self.sk - 1) * (self.tk - 1), 1, 1), negative_sample)))
                 result_loss += self.bce(pred, real_logits) / self.sk / self.tk
 
         return result_loss
@@ -499,7 +499,7 @@ class STDOD(nn.Module):
             if config.tradition_problem else None
 
         logging.info("Decomposition Block")
-        self.decomposition_block = DecompositionBlock(input_len=config.input_len, sk=config.q, tk=config.p,
+        self.decomposition_block = DecompositionBlock(input_len=input_len, sk=config.q, tk=config.p,
                                                       n=config.num_nodes, random_svd_k=config.random_svd_k,
                                                       rsvd=config.rsvd)
 
@@ -512,7 +512,7 @@ class STDOD(nn.Module):
                                             d_model=config.d_encoder)
 
         logging.info("Correlation Encoder")
-        self.encoder = CorrelationEncoder(input_len=config.input_len, num_nodes=config.num_nodes, sk=config.q,
+        self.encoder = CorrelationEncoder(input_len=input_len, num_nodes=config.num_nodes, sk=config.q,
                                           tk=config.p, layers=config.layers, n_heads=config.n_head,
                                           adp_emb=config.adp_emb, d_model=config.d_model, d_ff=config.d_ff,
                                           d_encoder=config.d_encoder, d_encoder_ff=config.d_encoder,  # same
@@ -520,12 +520,12 @@ class STDOD(nn.Module):
                                           d_out=config.d_encoder)
         logging.info("Prediction Head")
         self.prediction_head = PredictionHead(sk=config.q, tk=config.p, num_nodes=config.num_nodes,
-                                              d_model=config.d_encoder, c_out=config.c_out, input_len=config.input_len,
+                                              d_model=config.d_encoder, c_out=config.c_out, input_len=input_len,
                                               output_len=config.output_len, traditional=config.tradition_problem)
         self.contra = config.contra
         if config.contra:
             self.contrastive_head = ContrastiveHead(tk=config.p, sk=config.q, num_nodes=config.num_nodes,
-                                                    d_model=config.d_encoder, input_len=config.input_len)
+                                                    d_model=config.d_encoder, input_len=input_len)
 
         self.self_supervised_loss = 0
 
