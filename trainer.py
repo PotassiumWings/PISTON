@@ -52,9 +52,11 @@ class Trainer:
                 loss = self.model.calculate_loss(pred, y, update_dwa=True)
                 loss.backward()
 
-                loss_s = f"loss: {round(self.model.regular_loss.item(), 3)} " \
-                         f"{round(self.model.recover_loss.item(), 3)} " \
-                         f"{round(self.model.contra_loss.item(), 3)} "
+                loss_s = f"loss: {round(self.model.regular_loss.item(), 3)} "
+                if self.config.recover:
+                    loss_s += f"{round(self.model.recover_loss.item(), 3)} "
+                if self.config.contra:
+                    loss_s += f"{round(self.model.contra_loss.item(), 3)} "
 
                 self.check_step(batch_size=x.size(0))
                 self.calc_eta(iter=train_iter, start_epoch=start_epoch)

@@ -5,6 +5,7 @@ import pywt
 import ptwt
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 from configs.arguments import TrainingArguments
 from models import loss
@@ -532,7 +533,7 @@ class STDOD(nn.Module):
         self.regular_loss = 0
         self.use_dwa = config.use_dwa
         self.last_loss = None
-        self.loss_weights = [config.loss_lamb, config.recover_lamb, config.contra_lamb]
+        self.loss_weights = np.array([config.loss_lamb, config.recover_lamb, config.contra_lamb])
 
     def forward(self, x):
         self.recover_loss = self.contra_loss = 1e-10
@@ -588,6 +589,8 @@ def dwa(L_old, L_new, T=2):
     L_new = torch.Tensor(L_new)
     N = len(L_old)
     r = L_old / L_new
+    if L_new[2] < 1e-4:
+        r[2] = -100
     w = N * torch.softmax(r / T, dim=0)
     return w.numpy()
 
