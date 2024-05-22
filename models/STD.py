@@ -527,10 +527,16 @@ class STDOD(nn.Module):
             self.contrastive_head = ContrastiveHead(tk=config.p, sk=config.q, num_nodes=config.num_nodes,
                                                     d_model=config.d_encoder, input_len=input_len)
 
-        self.self_supervised_loss = 0
+        self.contra_loss = 0
+        self.recover_loss = 0
+        self.regular_loss = 0
+        self.use_dwa = config.use_dwa
+        self.last_loss = None
+        self.loss_weights = [config.loss_lamb, config.recover_lamb, config.contra_lamb]
 
     def forward(self, x):
-        self.self_supervised_loss = 0
+        self.recover_loss = self.contra_loss = 1e-10
+
         if self.transform_start_block is not None:
             x = self.transform_start_block(x)  # N L V C -> N L V V
 
@@ -551,18 +557,39 @@ class STDOD(nn.Module):
             embedding_masked = self.encoder(masked_decomposed, self.supports)
             # recover: tk*sk N V V L
             recover = self.recover_head(embedding_masked)
-            self.self_supervised_loss += loss.mae_torch(recover, decomposed)
+            self.recover_loss = loss.mae_torch(recover, decomposed)
 
         if self.contra:
-            self.self_supervised_loss += self.contrastive_head(embedding)
+            self.contra_loss = self.contrastive_head(embedding)
 
         # pred: N C_out L V V
         pred = self.prediction_head(embedding)
 
         return self.scaler.inverse_transform(pred)
 
-    def calculate_loss(self, pred, true):
-        return self.loss(pred.flatten(), true.flatten()) + self.self_supervised_loss
+    def calculate_loss(self, pred, true, update_dwa=False):
+        self.regular_loss = self.loss(pred.flatten(), true.flatten())
+        losses = [self.regular_loss, self.recover_loss, self.contra_loss]
+
+        if self.use_dwa and self.last_loss is not None and update_dwa:
+            self.loss_weights = dwa(self.last_loss, losses)
+
+        if update_dwa:
+            self.last_loss = losses
+
+        return self.loss_weights[0] * losses[0] + self.loss_weights[1] * losses[1] + self.loss_weights[2] * losses[2]
+
+    def get_loss_weights(self):
+        return self.loss_weights
+
+
+def dwa(L_old, L_new, T=2):
+    L_old = torch.Tensor(L_old)
+    L_new = torch.Tensor(L_new)
+    N = len(L_old)
+    r = L_old / L_new
+    w = N * torch.softmax(r / T, dim=0)
+    return w.numpy()
 
 
 def calc_sym(adj):

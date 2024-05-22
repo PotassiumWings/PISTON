@@ -35,9 +35,14 @@ class TrainingArguments(BaseModel):
     mask: bool = Field(False)
     mask_percent: float = Field(0.3)
     recover: bool = Field(False)
+    recover_lamb: float = Field(1)
 
     # do contrastive learning
     contra: bool = Field(False)
+    contra_lamb: float = Field(1)
+
+    use_dwa: bool = Field(False)
+    loss_lamb: float = Field(1)
 
     # correlation encoder
     adp_emb: int = Field(10)  # adaptive graph embedding length

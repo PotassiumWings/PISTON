@@ -49,14 +49,18 @@ class Trainer:
                 pred = self.model(x)
                 preds.append(pred)
 
-                loss = self.model.calculate_loss(pred, y)
+                loss = self.model.calculate_loss(pred, y, update_dwa=True)
                 loss.backward()
+
+                loss_s = f"loss: {round(self.model.regular_loss.item(), 3)} " \
+                         f"{round(self.model.recover_loss.item(), 3)} " \
+                         f"{round(self.model.contra_loss.item(), 3)} "
 
                 self.check_step(batch_size=x.size(0))
                 self.calc_eta(iter=train_iter, start_epoch=start_epoch)
 
-                logging.info(f"Training, {i}/{len(train_iter)}, {epoch}/{self.config.num_epoches}, "
-                             f"loss: {round(loss.item(), 4)}, "
+                logging.info(f"Training, {i}/{len(train_iter)}, {epoch}/{self.config.num_epoches}, " + loss_s +
+                             # f"loss: {round(loss.item(), 4)} {round(loss)}, "
                              f"step: {self.should_step} "
                              f"eta: {self.eta}")
 
@@ -66,6 +70,7 @@ class Trainer:
                     self.model.eval()
 
                     train_loss = self.model.calculate_loss(preds, ys)
+                    loss_weights = self.model.loss_weights
 
                     mets = self.eval(self.dataset.val_iter)
                     val_rmse, val_mape, val_mae = mets[0]
@@ -73,7 +78,9 @@ class Trainer:
                     logging.info(
                         f"Ep {epoch}/{self.config.num_epoches}, iter {self.current_num / self.config.batch_size},"
                         f" train loss {round(train_loss.item(), 4)},"
-                        f" val mae {round(val_mae, 4)} mape {round(val_mape, 4)} rmse {round(val_rmse, 4)}")
+                        f" val mae {round(val_mae, 4)} mape {round(val_mape, 4)} rmse {round(val_rmse, 4)},"
+                        f" loss weights {round(loss_weights[0].item(), 3)} {round(loss_weights[1].item(), 3)} "
+                        f"{round(loss_weights[2].item(), 3)}")
 
                     if val_mae < self.best_val_loss:
                         self.best_val_loss = val_mae
