@@ -433,26 +433,53 @@ class RecoverHead(nn.Module):
 
 
 class ContrastiveHead(nn.Module):
-    def __init__(self, sk, tk, num_nodes):
+    def __init__(self, sk, tk, num_nodes, d_model, input_len):
         super(ContrastiveHead, self).__init__()
         self.sk = sk
         self.tk = tk
         self.num_nodes = num_nodes
+        self.d_model = d_model
+        self.input_len = input_len
+        self.discriminator = nn.Bilinear(self.d_model * self.input_len, self.d_model * self.input_len, 1)
+        self.bce = nn.BCEWithLogitsLoss()
 
     def forward(self, x):
         # x: N V L t s C
-        input_len = x.shape[2]
-        d_model = x.shape[-1]
+        bs = x.shape[0]
 
         result_loss = 0
-        for i in range(self.tk):
-            # N V L s C
-            h = x[:, :, :, i, :, :]
-            # N L s C -> N s LC -> N V s LC
-            h_mean = torch.mean(h, 1).permute(0, 2, 1, 3).reshape(-1, self.sk, input_len * d_model)
-            h_mean = h_mean.unsqueeze(1).repeat(1, self.num_nodes)
+        time_indices = torch.Tensor(range(0, self.tk))
+        spatial_indices = torch.Tensor(range(0, self.sk))
 
-            logits_pred = self.linear(h_mean, )
+        # N' V 1
+        real_logits = torch.cat((torch.ones(self.sk + self.tk - 2 * bs, self.num_nodes, 1),
+                                 torch.zeros((self.sk - 1) * (self.tk - 1) * bs, self.num_nodes, 1)), dim=0)
+        for i in range(self.tk):
+            for j in range(self.sk):
+                tid = torch.cat((time_indices[:i], time_indices[i + 1:]))
+                sid = torch.cat((spatial_indices[:j], spatial_indices[j + 1:]))
+                import pdb
+                pdb.set_trace()
+
+                # N V L C
+                h = x[:, :, :, i, j, :].reshape(-1, self.num_nodes, self.input_len * self.d_model)
+
+                # N V L s+t-2 C
+                positive_sample = torch.cat((torch.index_select(x[:, :, :, :, j, :], 3, tid),
+                                             torch.index_select(x[:, :, :, i, :, :], 3, sid)), dim=3)
+                # N' V C'
+                positive_sample = positive_sample.permute(0, 3, 1, 2, 4)\
+                                                 .reshape(-1, self.num_nodes, self.input_len * self.d_model)
+
+                # N V L t-1 s-1 C
+                negative_sample = torch.index_select(torch.index_select(x, 3, tid), 4, sid)
+                # N' V C'
+                negative_sample = negative_sample.permute(0, 3, 4, 1, 2, 5)\
+                                                 .reshape(-1, self.num_nodes, self.d_model * self.input_len)
+
+                # N' V 1
+                pred = torch.cat((self.discriminator(h, positive_sample), self.discriminator(h, negative_sample)))
+                result_loss += self.bce(pred, real_logits) / self.sk / self.tk
 
         return result_loss
 
@@ -495,7 +522,11 @@ class STDOD(nn.Module):
         self.prediction_head = PredictionHead(sk=config.q, tk=config.p, num_nodes=config.num_nodes,
                                               d_model=config.d_encoder, c_out=config.c_out, input_len=config.input_len,
                                               output_len=config.output_len, traditional=config.tradition_problem)
-        # self.contrastive_head = ContrastiveHead()
+        self.contra = config.contra
+        if config.contra:
+            self.contrastive_head = ContrastiveHead(tk=config.p, sk=config.q, num_nodes=config.num_nodes,
+                                                    d_model=config.d_encoder, input_len=config.input_len)
+
         self.self_supervised_loss = 0
 
     def forward(self, x):
@@ -521,6 +552,9 @@ class STDOD(nn.Module):
             # recover: tk*sk N V V L
             recover = self.recover_head(embedding_masked)
             self.self_supervised_loss += loss.mae_torch(recover, decomposed)
+
+        if self.contra:
+            self.self_supervised_loss += self.contrastive_head(embedding)
 
         # pred: N C_out L V V
         pred = self.prediction_head(embedding)

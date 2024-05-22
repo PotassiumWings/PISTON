@@ -36,6 +36,9 @@ class TrainingArguments(BaseModel):
     mask_percent: float = Field(0.3)
     recover: bool = Field(False)
 
+    # do contrastive learning
+    contra: bool = Field(False)
+
     # correlation encoder
     adp_emb: int = Field(10)  # adaptive graph embedding length
     layers: int = Field(4)
