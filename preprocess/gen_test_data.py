@@ -1,6 +1,6 @@
-import numpy as np
 import os
 
+import numpy as np
 
 if not os.path.exists("../data/test"):
     os.mkdir("../data/test")

@@ -1,6 +1,4 @@
-import numpy as np
 from scripts_utils import *
-
 
 f = open("logs_pq", "r", encoding="utf-8")
 result = parse_f(f, pattern="python app.py", features=["--p", "--q"], default=["1", "1"], result_pattern="Test:")

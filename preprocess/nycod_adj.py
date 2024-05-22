@@ -1,6 +1,5 @@
 import numpy as np
 
-
 r = 15
 c = 5
 adj = [[0 for i in range(r * c)] for j in range(r * c)]

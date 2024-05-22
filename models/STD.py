@@ -1,15 +1,14 @@
 import logging
 
-import torch
-import pywt
+import numpy as np
 import ptwt
+import pywt
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 
 from configs.arguments import TrainingArguments
 from models import loss
-from utils.normalize import Scaler
 
 
 class DecompositionBlock(nn.Module):
@@ -468,14 +467,14 @@ class ContrastiveHead(nn.Module):
                 positive_sample = torch.cat((torch.index_select(x[:, :, :, :, j, :], 3, tid),
                                              torch.index_select(x[:, :, :, i, :, :], 3, sid)), dim=3)
                 # N' V C'
-                positive_sample = positive_sample.permute(0, 3, 1, 2, 4)\
-                                                 .reshape(-1, self.num_nodes, self.input_len * self.d_model)
+                positive_sample = positive_sample.permute(0, 3, 1, 2, 4) \
+                    .reshape(-1, self.num_nodes, self.input_len * self.d_model)
 
                 # N V L t-1 s-1 C
                 negative_sample = torch.index_select(torch.index_select(x, 3, tid), 4, sid)
                 # N' V C'
-                negative_sample = negative_sample.permute(0, 3, 4, 1, 2, 5)\
-                                                 .reshape(-1, self.num_nodes, self.d_model * self.input_len)
+                negative_sample = negative_sample.permute(0, 3, 4, 1, 2, 5) \
+                    .reshape(-1, self.num_nodes, self.d_model * self.input_len)
 
                 # N' V 1
                 pred = torch.cat((self.discriminator(h.repeat(self.sk + self.tk - 2, 1, 1), positive_sample),

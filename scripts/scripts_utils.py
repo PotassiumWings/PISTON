@@ -32,6 +32,7 @@ def parse_f(f, pattern: str, features: list, default: list, result_pattern: str)
         for key in keys[:-1]:
             current_dict = current_dict.setdefault(key, {})
         current_dict[keys[-1]] = value
+
     result = nested_dict()
 
     current_features = default.copy()

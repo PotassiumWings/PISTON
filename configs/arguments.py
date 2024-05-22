@@ -62,4 +62,3 @@ class TrainingArguments(BaseModel):
     # for traffic forecasting
     tradition_problem: bool = Field(False)
     origin_c_in: int = Field(2)
-
