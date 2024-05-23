@@ -534,7 +534,7 @@ class STDOD(nn.Module):
         self.last_loss = None
         self.loss_weights = np.array([config.loss_lamb, config.recover_lamb, config.contra_lamb])
 
-    def fuse_ssl(self):
+    def disable_ssl(self):
         self.contra = self.recover = False
 
     def forward(self, x):
@@ -560,7 +560,7 @@ class STDOD(nn.Module):
             embedding_masked = self.encoder(masked_decomposed, self.supports)
             # recover: tk*sk N V V L
             recover = self.recover_head(embedding_masked)
-            self.recover_loss = loss.mae_torch(recover, decomposed)
+            self.recover_loss = loss.mae_torch(recover, decomposed, self.scaler.transform(1e-10))
 
         if self.contra:
             self.contra_loss = self.contrastive_head(embedding)

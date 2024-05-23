@@ -38,8 +38,8 @@ class Trainer:
         last_update_val = 0  # last batch to update val loss
         self.current_num = self.accumulated_num = 0
         for epoch in range(start_epoch, self.config.num_epoches):
-            if epoch >= self.config.fuse_ssl:
-                self.model.fuse_ssl()
+            if epoch >= self.config.disable_ssl_epoch:
+                self.model.disable_ssl()
             train_iter.shuffle()
             ys, preds = [], []
             jump_flag = False
