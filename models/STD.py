@@ -534,6 +534,9 @@ class STDOD(nn.Module):
         self.last_loss = None
         self.loss_weights = np.array([config.loss_lamb, config.recover_lamb, config.contra_lamb])
 
+    def fuse_ssl(self):
+        self.contra = self.recover = False
+
     def forward(self, x):
         self.recover_loss = self.contra_loss = 1e-10
 

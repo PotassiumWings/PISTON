@@ -44,6 +44,8 @@ class TrainingArguments(BaseModel):
     use_dwa: bool = Field(False)
     loss_lamb: float = Field(1)
 
+    fuse_ssl: int = Field(100)
+
     # correlation encoder
     adp_emb: int = Field(10)  # adaptive graph embedding length
     layers: int = Field(4)
