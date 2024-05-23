@@ -560,7 +560,9 @@ class STDOD(nn.Module):
             embedding_masked = self.encoder(masked_decomposed, self.supports)
             # recover: tk*sk N V V L
             recover = self.recover_head(embedding_masked)
-            self.recover_loss = loss.mae_torch(recover, decomposed, self.scaler.transform(1e-10))
+            self.recover_loss = loss.mae_torch(self.scaler.inverse_transform(recover),
+                                               self.scaler.inverse_transform(decomposed),
+                                               1e-10)
 
         if self.contra:
             self.contra_loss = self.contrastive_head(embedding)
