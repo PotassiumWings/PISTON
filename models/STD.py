@@ -585,6 +585,18 @@ class STDOD(nn.Module):
     def get_loss_weights(self):
         return self.loss_weights
 
+    def get_contra_loss(self):
+        try:
+            return self.contra_loss.item()
+        except AttributeError:
+            return 0
+
+    def get_recover_loss(self):
+        try:
+            return self.recover_loss.item()
+        except AttributeError:
+            return 0
+
 
 def dwa(L_old, L_new, T=2):
     L_old = torch.Tensor(L_old)
