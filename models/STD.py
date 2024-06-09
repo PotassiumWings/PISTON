@@ -75,7 +75,7 @@ class DecompositionBlock(nn.Module):
                 sum_val += mat
                 if use_rsvd_emb:
                     # NlV1*Nl11 NlV1 -> NlV2 -> NV2l
-                    emb = torch.cat([u[..., j:j+1] * sig[..., j:j+1, j:j+1], v[..., j:j+1]], -1)
+                    emb = torch.cat([u[..., j:j+1] * sig[..., j:j+1], v[..., j:j+1]], -1)
                     res.append(emb.permute(0, 2, 3, 1))
                 else:
                     res.append(mat)
@@ -94,7 +94,7 @@ class DecompositionBlock(nn.Module):
 
         # N V L tksk C -> N V L tk sk C
         res = res.permute(1, 3, 2, 0, 4)
-        res = res.view(-1, self.num_nodes, self.input_len, self.tk, self.sk, self.output_dim)
+        res = res.view(-1, self.n, self.input_len, self.tk, self.sk, self.output_dim)
         return res
 
 
