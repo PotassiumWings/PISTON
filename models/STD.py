@@ -12,7 +12,7 @@ from models import loss
 
 
 class DecompositionBlock(nn.Module):
-    def __init__(self, rsvd, input_len, sk, tk, n, random_svd_k):
+    def __init__(self, rsvd, input_len, sk, tk, n, random_svd_k, use_rsvd_emb, output_dim):
         super(DecompositionBlock, self).__init__()
         self.rsvd = rsvd
         self.tk = tk
@@ -20,8 +20,18 @@ class DecompositionBlock(nn.Module):
         self.n = n
         self.k = random_svd_k
         self.input_len = input_len
+        self.use_rsvd_emb = use_rsvd_emb and rsvd
 
         self.p = nn.Parameter(torch.randn(self.n, self.k), requires_grad=True)
+        self.start_linear = nn.ModuleList()
+        self.output_dim = output_dim
+        for i in range(self.tk):
+            for j in range(self.sk - 1):
+                if self.use_rsvd_emb:
+                    self.start_linear.append(nn.Linear(2, output_dim))
+                else:
+                    self.start_linear.append(nn.Linear(n, output_dim))
+            self.start_linear.append(nn.Linear(n, output_dim))
 
     def svd(self, x):
         if not self.rsvd:
@@ -45,6 +55,8 @@ class DecompositionBlock(nn.Module):
         x = ptwt.wavedec(x, wavelet, mode='zero', level=self.tk - 1)
         x = x[::-1]  # high -> low
 
+        use_rsvd_emb = self.use_rsvd_emb and self.rsvd
+
         # x: [y1, y2, ..., ytk], y NVVl
         res = []
         for i in range(self.tk):
@@ -56,20 +68,34 @@ class DecompositionBlock(nn.Module):
             sum_val = torch.zeros_like(x[i])
 
             for j in range(self.sk - 1):
+                # NlVk Nlkk NlVk
                 ui, sigi, vi = u[..., j:j + 1], sig[..., j:j + 1], v[..., j:j + 1]
-                # mat: NlVV
+                # mat: NlVV -> NVVl
                 mat = torch.matmul(torch.matmul(ui, torch.diag_embed(sigi)), vi.transpose(-2, -1)).permute(0, 2, 3, 1)
                 sum_val += mat
-                # N V V l
-                res.append(mat)
+                if use_rsvd_emb:
+                    # NlV1*Nl11 NlV1 -> NlV2 -> NV2l
+                    emb = torch.cat([u[..., j:j+1] * sig[..., j:j+1, j:j+1], v[..., j:j+1]], -1)
+                    res.append(emb.permute(0, 2, 3, 1))
+                else:
+                    res.append(mat)
 
             # residual term
             res.append(x[i] - sum_val)
         # padding
         for i in range(len(res)):
+            # NV?l -> NlV?
             res[i] = nn.functional.pad(res[i], (self.input_len - res[i].size(3), 0, 0, 0))
-        # res: tk*sk  N V V l
-        return torch.stack(res)
+            res[i] = res[i].permute(0, 3, 1, 2)
+            # N l V C
+            res[i] = self.start_linear[i](res[i])
+        # res: tk*sk  N l V C
+        res = torch.stack(res)
+
+        # N V L tksk C -> N V L tk sk C
+        res = res.permute(1, 3, 2, 0, 4)
+        res = res.view(-1, self.num_nodes, self.input_len, self.tk, self.sk, self.output_dim)
+        return res
 
 
 class MultiHeadAttention(nn.Module):
@@ -265,7 +291,7 @@ class CorrelationEncoder(nn.Module):
         self.layers = layers
         self.d_model = d_model
         self.d_out = d_out
-        self.start_linear = nn.Linear(num_nodes, d_model)
+        # self.start_linear = nn.Linear(num_nodes, d_model)
         self.position_embedding = nn.Parameter(torch.randn(input_len, tk, sk, d_model))
         self.att_t_fil = nn.ModuleList()
         self.att_t_gate = nn.ModuleList()
@@ -295,11 +321,13 @@ class CorrelationEncoder(nn.Module):
                                             n_heads=n_heads, num_nodes=num_nodes, input_len=input_len)
 
     def forward(self, x, supports):
-        # x: tk*sk N V Vd L -> tk sk N V Vd L -> N V L tk sk Vd
-        x = x.reshape(self.tk, self.sk, -1, self.num_nodes, self.num_nodes, self.input_len)
-        x = torch.einsum('tsnvwl->nvltsw', x)  # x = x.permute(2, 3, 5, 0, 1, 4)
+        # # x: tk*sk N V Vd L -> tk sk N V Vd L -> N V L tk sk Vd
+        # x = x.reshape(self.tk, self.sk, -1, self.num_nodes, self.num_nodes, self.input_len)
+        # x = torch.einsum('tsnvwl->nvltsw', x)  # x = x.permute(2, 3, 5, 0, 1, 4)
+        # # x: N V L tk sk C
+        # # x = self.start_linear(x)
+
         # x: N V L tk sk C
-        x = self.start_linear(x)
         x = x + self.position_embedding  # add for causal transformer
 
         skip = torch.zeros_like(x)
@@ -501,11 +529,13 @@ class STDOD(nn.Module):
         logging.info("Decomposition Block")
         self.decomposition_block = DecompositionBlock(input_len=input_len, sk=config.q, tk=config.p,
                                                       n=config.num_nodes, random_svd_k=config.random_svd_k,
-                                                      rsvd=config.rsvd)
+                                                      rsvd=config.rsvd, use_rsvd_emb=config.use_rsvd_emb,
+                                                      output_dim=config.d_model)
 
         self.recover = config.recover
         self.do_mask = config.mask
         if config.recover:
+            assert False, "Recover has been disabled."
             if config.mask:
                 self.mask = Mask(mask_percent=config.mask_percent)
             self.recover_head = RecoverHead(sk=config.q, tk=config.p, num_nodes=config.num_nodes,
@@ -544,7 +574,7 @@ class STDOD(nn.Module):
             x = self.transform_start_block(x)  # N L V C -> N L V V
 
         # x: N L V V
-        # decomposed: tk*sk N V V L
+        # decomposed: N V L tk sk C
         decomposed = self.decomposition_block(x)
         if self.transform_start_block is None:
             decomposed = self.scaler.transform(decomposed)
@@ -560,9 +590,10 @@ class STDOD(nn.Module):
             embedding_masked = self.encoder(masked_decomposed, self.supports)
             # recover: tk*sk N V V L
             recover = self.recover_head(embedding_masked)
-            self.recover_loss = loss.mae_torch(self.scaler.inverse_transform(recover),
-                                               self.scaler.inverse_transform(decomposed),
-                                               1e-10)
+            self.recover_loss = loss.mae_torch(recover, decomposed)
+            # self.recover_loss = loss.mae_torch(self.scaler.inverse_transform(recover),
+            #                                    self.scaler.inverse_transform(decomposed),
+            #                                    1e-10)
 
         if self.contra:
             self.contra_loss = self.contrastive_head(embedding)

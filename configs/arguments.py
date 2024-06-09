@@ -28,6 +28,7 @@ class TrainingArguments(BaseModel):
     # for decomposing
     rsvd: bool = Field(True)
     random_svd_k: int = Field(15)
+    use_rsvd_emb: bool = Field(False)  # use u, sig, v as emb
     p: int = Field(2)
     q: int = Field(5)
 
