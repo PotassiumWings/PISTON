@@ -34,9 +34,9 @@ def get_data(origin_data):
     return res_x, res_y
 
 
-x, y = get_data(train_data)
-np.savez_compressed("../data/NYC-TOD5/train.npz", x=x, y=y)
-x, y = get_data(val_data)
-np.savez_compressed("../data/NYC-TOD5/val.npz", x=x, y=y)
+# x, y = get_data(train_data)
+# np.savez_compressed("../data/NYC-TOD5/train.npz", x=x, y=y)
+# x, y = get_data(val_data)
+# np.savez_compressed("../data/NYC-TOD5/val.npz", x=x, y=y)
 x, y = get_data(test_data)
-np.savez_compressed("../data/NYC-TOD55/test.npz", x=x, y=y)
+np.savez_compressed("../data/NYC-TOD5/test.npz", x=x, y=y)

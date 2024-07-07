@@ -159,12 +159,14 @@ class FreqAttention(nn.Module):
         self.linear = nn.Linear(input_len * sk * tk, output_len)
 
     def forward(self, x):
-        # x: N V L_in tk sk C -> N V L_out C
-        # x = torch.einsum('nvltsc->nvtslc', x)
+        # x: N V L_in tk sk C -> NVLo ts C
         x = x.reshape(-1, self.tk * self.sk, self.d_model)
 
-        # NV Ltksk C
+        # NVLo ts C
         x = self.attention(x)
+
+        # NV Lts C
+        x = x.reshape(-1, self.input_len * self.tk * self.sk, self.d_model)
 
         # NV Lout C
         x = self.linear(x.permute(0, 2, 1)).permute(0, 2, 1)
