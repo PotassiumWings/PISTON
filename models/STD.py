@@ -47,10 +47,10 @@ class STDOD(nn.Module):
                                           adp_emb=config.adp_emb, d_model=config.d_model, d_ff=config.d_ff,
                                           d_encoder=config.d_encoder, d_encoder_ff=config.d_encoder,  # same
                                           dropout=config.dropout, support_len=len(supports), order=config.order,
-                                          d_out=config.d_encoder)
+                                          d_out=config.d_encoder, output_len=config.output_len)
         logging.info("Prediction Head")
-        self.prediction_head = PredictionHead(sk=config.q, tk=config.p, num_nodes=config.num_nodes,
-                                              d_model=config.d_encoder, c_out=config.c_out, input_len=input_len,
+        self.prediction_head = PredictionHead(num_nodes=config.num_nodes,
+                                              d_model=config.d_encoder, c_out=config.c_out,
                                               output_len=config.output_len, traditional=config.tradition_problem)
         self.contra = config.contra
         if config.contra:

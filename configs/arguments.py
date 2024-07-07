@@ -2,10 +2,10 @@ from pydantic import BaseModel, Field
 
 
 class TrainingArguments(BaseModel):
-    dataset_name: str = Field("NYC-TOD4")
+    dataset_name: str = Field("NYC-TOD5")
     # data feature
     input_len: int = Field(48)  # Time step len
-    output_len: int = Field(1)  # next step prediction, not changeable
+    output_len: int = Field(12)  # next step prediction, not changeable
 
     num_nodes: int = Field(75)
 

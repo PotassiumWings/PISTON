@@ -146,24 +146,31 @@ class SpatialConvolution(nn.Module):
 
 
 class FreqAttention(nn.Module):
-    def __init__(self, tk, sk, d_model, d_ff, n_heads, num_nodes, input_len, dropout):
+    def __init__(self, tk, sk, d_model, d_ff, n_heads, num_nodes, input_len, dropout, output_len):
         super(FreqAttention, self).__init__()
         self.tk = tk
         self.sk = sk
         self.num_nodes = num_nodes
         self.input_len = input_len
+        self.output_len = output_len
         self.d_model = d_model
         self.attention = MultiHeadAttention(d_model=d_model, n_heads=n_heads,
                                             d_ff=d_ff, dropout=dropout)
+        self.linear = nn.Linear(input_len * sk * tk, output_len)
 
     def forward(self, x):
-        # x: N V L tk sk C -> NV tk*sk*L C
+        # x: N V L_in tk sk C -> N V L_out C
         # x = torch.einsum('nvltsc->nvtslc', x)
         x = x.reshape(-1, self.tk * self.sk, self.d_model)
 
+        # NV Ltksk C
         x = self.attention(x)
-        x = x.reshape(-1, self.num_nodes, self.input_len, self.tk, self.sk, self.d_model)
-        # x = torch.einsum('nvtslc->nvltsc', x)
+
+        # NV Lout C
+        x = self.linear(x.permute(0, 2, 1)).permute(0, 2, 1)
+
+        # N V Lout C
+        x = x.reshape(-1, self.num_nodes, self.output_len, self.d_model)
         return x
 
 
@@ -186,7 +193,7 @@ class Normalization(nn.Module):
 
 
 class CorrelationEncoder(nn.Module):
-    def __init__(self, input_len, num_nodes, tk, sk, layers, adp_emb, n_heads, d_out, d_model, d_ff,
+    def __init__(self, input_len, output_len, num_nodes, tk, sk, layers, adp_emb, n_heads, d_out, d_model, d_ff,
                  d_encoder, d_encoder_ff, dropout, support_len, order):
         super(CorrelationEncoder, self).__init__()
         self.tk = tk
@@ -223,7 +230,8 @@ class CorrelationEncoder(nn.Module):
                                 kernel_size=(1, 1), bias=True)
 
         self.freq_attention = FreqAttention(tk=tk, sk=sk, d_model=d_encoder, d_ff=d_encoder_ff, dropout=dropout,
-                                            n_heads=n_heads, num_nodes=num_nodes, input_len=input_len)
+                                            n_heads=n_heads, num_nodes=num_nodes, input_len=input_len,
+                                            output_len=output_len)
 
     def forward(self, x, supports):
         # # x: tk*sk N V Vd L -> tk sk N V Vd L -> N V L tk sk Vd
@@ -260,7 +268,7 @@ class CorrelationEncoder(nn.Module):
 
         output = output.permute(0, 2, 3, 1).reshape(-1, self.num_nodes, self.input_len, self.tk, self.sk, self.d_out)
 
-        # output, freq_attn: N V L tk sk C
+        # output, freq_attn: N V Lo C
         freq_attn = self.freq_attention(output)
         return freq_attn
 
