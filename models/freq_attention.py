@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import math
 import torch.nn.functional as F
 
 
@@ -176,6 +177,113 @@ class FreqAttention(nn.Module):
         return x
 
 
+class FreqSetAttention(nn.Module):
+    def __init__(self, tk, sk, d_model, d_ff, n_heads, num_nodes, input_len, dropout, output_len):
+        super(FreqSetAttention, self).__init__()
+        self.tk = tk
+        self.sk = sk
+        self.set_size = int(math.pow(2, tk * sk - 1))
+        self.mask_size = self.tk * self.sk
+
+        self.masks = []
+        for i in range(self.mask_size):
+            masks = []
+            for s in range(self.set_size):
+                bitmap = format(s, f'0{self.mask_size - 1}b')
+                mask_list = [int(bit) for bit in bitmap]
+                mask_list.insert(i, 0)
+                mask = torch.LongTensor(mask_list)
+                mask = mask.nonzero().squeeze(-1)
+                masks.append(mask)
+            self.masks.append(masks)
+
+        self.num_nodes = num_nodes
+        self.input_len = input_len
+        self.output_len = output_len
+        self.d_model = d_model
+        self.d_qkv = d_model // n_heads
+        self.n_heads = n_heads
+
+        self.dropout = nn.Dropout(dropout)
+
+        self.WQ, self.WK, self.WV = nn.ModuleList(), nn.ModuleList(), nn.ModuleList()
+        for i in range(self.mask_size):
+            self.WQ.append(nn.Linear(d_model, d_model))
+            self.WK.append(nn.Linear(d_model, d_model))
+            self.WV.append(nn.Linear(d_model, d_model))
+        self.linear = nn.Linear(input_len * sk * tk, output_len)
+
+        self.attn_weights = nn.Parameter(torch.randn(self.mask_size, self.set_size))
+
+    def forward(self, x):
+        bs = x.size(0)
+
+        # x: N V L_in tk sk C -> tk sk N L_in V C
+        x = torch.einsum("nvltsc->tsnlvc", x)
+        # x: tk sk N L_in V C -> tksk N L_in V C
+        x = x.reshape(self.tk * self.sk, -1, self.input_len, self.num_nodes, self.d_model)
+
+        qs, ks, vs = [], [], []
+        for i in range(self.mask_size):
+            q = self.WQ[i](x[i]).reshape(bs, -1, self.n_heads, self.d_qkv).permute(0, 2, 1, 3)
+            k = self.WK[i](x[i]).reshape(bs, -1, self.n_heads, self.d_qkv).permute(0, 2, 1, 3)
+            v = self.WV[i](x[i]).reshape(bs, -1, self.n_heads, self.d_qkv).permute(0, 2, 1, 3)
+            qs.append(q)
+            ks.append(k)
+            vs.append(v)
+        qs, ks, vs = torch.stack(qs), torch.stack(ks), torch.stack(vs)
+
+        all_res = []
+        for i in range(self.mask_size):
+            residual = x[i].permute(0, 2, 1, 3)  # N L V C -> N V L C
+            sum_exp = 0
+            result_part = 0
+            # 0: residual
+            for s in range(1, self.set_size):
+                # calc mask: tk*sk
+                mask = self.masks[i][s]
+
+                q = qs[i]  # N H VL C
+                k = ks[mask]  # m N H VL C
+                v = vs[mask]
+                m = k.size(0)
+
+                # N VL / H / 1 / C
+                q = q.permute(0, 2, 1, 3).reshape(-1, self.n_heads, 1, self.d_qkv)
+                # N VL / H / C / m
+                k = k.permute(1, 3, 2, 4, 0).reshape(-1, self.n_heads, self.d_qkv, m)
+                v = v.permute(1, 3, 2, 4, 0).reshape(-1, self.n_heads, self.d_qkv, m)
+
+                # N VL / H / 1 / m
+                attention = q @ k / self.d_qkv ** 0.5
+                attention = self.dropout(F.softmax(attention, dim=-1))
+                # N VL / H / 1 / C
+                res = attention @ v.transpose(-2, -1)
+                # N V L C
+                res = res.reshape(-1, self.num_nodes, self.input_len, self.d_model)
+
+                result_part += res * torch.exp(self.attn_weights[i][s])
+                sum_exp += torch.exp(self.attn_weights[i][s])
+            # softmax
+            result_part /= sum_exp
+
+            all_res.append(result_part + residual)
+
+        # ts N V L C
+        all_res = torch.stack(all_res)
+
+        # ts N V L C -> N V C ts L -> N V C tsL
+        all_res = all_res.permute(1, 2, 4, 0, 3)
+        all_res = all_res.reshape(-1, self.num_nodes, self.d_model, self.mask_size * self.input_len)
+
+        # N V C Lo
+        all_res = self.linear(all_res)
+
+        # N V Lout C
+        all_res = all_res.permute(0, 1, 3, 2)
+        return all_res
+
+
 class Normalization(nn.Module):
     def __init__(self, tk, sk, num_nodes, input_len, d_model):
         super(Normalization, self).__init__()
@@ -231,9 +339,13 @@ class CorrelationEncoder(nn.Module):
         self.output = nn.Conv2d(in_channels=d_model * sk * tk, out_channels=d_out * sk * tk,
                                 kernel_size=(1, 1), bias=True)
 
-        self.freq_attention = FreqAttention(tk=tk, sk=sk, d_model=d_encoder, d_ff=d_encoder_ff, dropout=dropout,
-                                            n_heads=n_heads, num_nodes=num_nodes, input_len=input_len,
-                                            output_len=output_len)
+        # self.freq_attention = FreqAttention(tk=tk, sk=sk, d_model=d_encoder, d_ff=d_encoder_ff, dropout=dropout,
+        #                                     n_heads=n_heads, num_nodes=num_nodes, input_len=input_len,
+        #                                     output_len=output_len)
+
+        self.freq_attention = FreqSetAttention(tk=tk, sk=sk, d_model=d_encoder, d_ff=d_encoder_ff, dropout=dropout,
+                                               n_heads=n_heads, num_nodes=num_nodes, input_len=input_len,
+                                               output_len=output_len)
 
     def forward(self, x, supports):
         # # x: tk*sk N V Vd L -> tk sk N V Vd L -> N V L tk sk Vd

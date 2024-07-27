@@ -3,11 +3,10 @@ import numpy as np
 origin_data = np.load("../data/NYC-TOD/oddata.npy", allow_pickle=True, encoding='latin1')[()][0]
 
 t, n, r, c = origin_data.shape
-
 # t = 365 * 24 * 2
 
+# 30min 步长求和聚合到 2h 步长
 data = origin_data.reshape(t // 4, 4, n, n)
-
 data = data.sum(1)
 t //= 4
 
@@ -28,8 +27,6 @@ horizon = 12
 
 
 def get_data(origin_data):
-    import pdb
-    pdb.set_trace()
     T, v, _ = origin_data.shape
     res_x = np.asarray([origin_data[i:i + timestep, :, :] for i in range(T - timestep - horizon - 1)])
     res_y = np.asarray([origin_data[i + timestep:i + timestep + 12, :, :] for i in range(T - timestep - horizon - 1)])

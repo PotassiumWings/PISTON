@@ -10,12 +10,13 @@ from configs.arguments import TrainingArguments
 from dataset.processor import MyDataset
 from models.STD import STDOD
 from trainer import Trainer
+from utils.device import DEVICE
 from utils.file_utils import ensure_dir
 
 
 def main(config: TrainingArguments):
     torch.autograd.set_detect_anomaly(True)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = DEVICE
     time = datetime.strftime(datetime.now(), "%m%d_%H%M%S")
     setup(config, time)
 

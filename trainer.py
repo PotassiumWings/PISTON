@@ -8,6 +8,7 @@ from torch.optim import Adam, AdamW, SGD
 from configs.arguments import TrainingArguments
 from dataset.processor import AbstractDataset
 from models import loss
+from utils.device import DEVICE
 
 
 class Trainer:
@@ -15,7 +16,7 @@ class Trainer:
         self.model = model
         self.dataset = dataset
         self.config = config
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = DEVICE
         self.time = time
         self.save_path = './saved_dict/' + self.time + '.ckpt'
         self.best_val_loss = float('inf')

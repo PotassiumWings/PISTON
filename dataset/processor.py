@@ -6,12 +6,13 @@ import torch
 
 from configs.arguments import TrainingArguments
 from utils.normalize import get_scaler
+from utils.device import DEVICE
 
 
 class AbstractDataset(object):
     def __init__(self, config: TrainingArguments):
         self.config = config
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = DEVICE
         self.train_iter, self.val_iter, self.test_iter = None, None, None
         self.supports = None
         self.scaler = None
