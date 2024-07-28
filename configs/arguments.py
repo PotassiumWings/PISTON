@@ -55,6 +55,7 @@ class TrainingArguments(BaseModel):
     n_head: int = Field(2)
     d_encoder: int = Field(16)
     order: int = Field(2)  # graph convolution cheby order
+    only_1: bool = Field(False)
 
     seed: int = Field(0)
     load: str = Field("")

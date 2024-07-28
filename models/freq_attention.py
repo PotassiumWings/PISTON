@@ -178,12 +178,13 @@ class FreqAttention(nn.Module):
 
 
 class FreqSetAttention(nn.Module):
-    def __init__(self, tk, sk, d_model, d_ff, n_heads, num_nodes, input_len, dropout, output_len):
+    def __init__(self, tk, sk, d_model, d_ff, n_heads, num_nodes, input_len, dropout, output_len, only_1):
         super(FreqSetAttention, self).__init__()
         self.tk = tk
         self.sk = sk
         self.set_size = int(math.pow(2, tk * sk - 1))
         self.mask_size = self.tk * self.sk
+        self.only_1 = only_1
 
         self.masks = []
         for i in range(self.mask_size):
@@ -239,7 +240,10 @@ class FreqSetAttention(nn.Module):
             sum_exp = 0
             result_part = 0
             # 0: residual
-            for s in range(1, self.set_size):
+            start = 1
+            if self.only_1:
+                start = self.set_size - 1
+            for s in range(start, self.set_size):
                 # calc mask: tk*sk
                 mask = self.masks[i][s]
 
@@ -304,7 +308,7 @@ class Normalization(nn.Module):
 
 class CorrelationEncoder(nn.Module):
     def __init__(self, input_len, output_len, num_nodes, tk, sk, layers, adp_emb, n_heads, d_out, d_model, d_ff,
-                 d_encoder, d_encoder_ff, dropout, support_len, order):
+                 d_encoder, d_encoder_ff, dropout, support_len, order, only_1):
         super(CorrelationEncoder, self).__init__()
         self.tk = tk
         self.sk = sk
@@ -345,7 +349,7 @@ class CorrelationEncoder(nn.Module):
 
         self.freq_attention = FreqSetAttention(tk=tk, sk=sk, d_model=d_encoder, d_ff=d_encoder_ff, dropout=dropout,
                                                n_heads=n_heads, num_nodes=num_nodes, input_len=input_len,
-                                               output_len=output_len)
+                                               output_len=output_len, only_1=only_1)
 
     def forward(self, x, supports):
         # # x: tk*sk N V Vd L -> tk sk N V Vd L -> N V L tk sk Vd
