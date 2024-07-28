@@ -16,15 +16,19 @@ class DecompositionBlock(nn.Module):
         self.use_rsvd_emb = use_rsvd_emb and rsvd
 
         self.p = nn.Parameter(torch.randn(self.n, self.k), requires_grad=True)
-        self.start_linear = nn.ModuleList()
+        self.start_linear_o = nn.ModuleList()
+        self.start_linear_d = nn.ModuleList()
         self.output_dim = output_dim
         for i in range(self.tk):
             for j in range(self.sk - 1):
                 if self.use_rsvd_emb:
-                    self.start_linear.append(nn.Linear(2, output_dim))
+                    self.start_linear_o.append(nn.Linear(2, output_dim))
+                    self.start_linear_d.append(nn.Linear(2, output_dim))
                 else:
-                    self.start_linear.append(nn.Linear(n, output_dim))
-            self.start_linear.append(nn.Linear(n, output_dim))
+                    self.start_linear_o.append(nn.Linear(n, output_dim))
+                    self.start_linear_d.append(nn.Linear(n, output_dim))
+            self.start_linear_o.append(nn.Linear(n, output_dim))
+            self.start_linear_d.append(nn.Linear(n, output_dim))
 
     def svd(self, x):
         if not self.rsvd:
@@ -74,18 +78,20 @@ class DecompositionBlock(nn.Module):
                     res.append(mat)
 
             # residual term
-            res.append(x[i] - sum_val)
+            res.append(x[i])
+            # res.append(x[i] - sum_val)
         # padding
         for i in range(len(res)):
             # NV?l -> NlV?
             res[i] = nn.functional.pad(res[i], (self.input_len - res[i].size(3), 0, 0, 0))
             res[i] = res[i].permute(0, 3, 1, 2)
             # N l V C
-            res[i] = self.start_linear[i](res[i])
+            res[i] = torch.cat([self.start_linear_o[i](res[i]),
+                                self.start_linear_d[i](res[i].transpose(-2, -1))], dim=-1)
         # res: tk*sk  N l V C
         res = torch.stack(res)
 
         # N V L tksk C -> N V L tk sk C
         res = res.permute(1, 3, 2, 0, 4)
-        res = res.view(-1, self.n, self.input_len, self.tk, self.sk, self.output_dim)
+        res = res.view(-1, self.n, self.input_len, self.tk, self.sk, 2 * self.output_dim)
         return res

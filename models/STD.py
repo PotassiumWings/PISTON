@@ -30,7 +30,7 @@ class STDOD(nn.Module):
         self.decomposition_block = DecompositionBlock(input_len=input_len, sk=config.q, tk=config.p,
                                                       n=config.num_nodes, random_svd_k=config.random_svd_k,
                                                       rsvd=config.rsvd, use_rsvd_emb=config.use_rsvd_emb,
-                                                      output_dim=config.d_model)
+                                                      output_dim=config.d_model // 2)
 
         self.recover = config.recover
         self.do_mask = config.mask
