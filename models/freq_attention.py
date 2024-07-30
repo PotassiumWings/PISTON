@@ -212,7 +212,6 @@ class FreqSetAttention(nn.Module):
             self.WQ.append(nn.Linear(d_model, d_model))
             self.WK.append(nn.Linear(d_model, d_model))
             self.WV.append(nn.Linear(d_model, d_model))
-        self.linear = nn.Linear(input_len * sk * tk, output_len)
 
         self.attn_weights = nn.Parameter(torch.randn(self.mask_size, self.set_size))
 
@@ -276,15 +275,9 @@ class FreqSetAttention(nn.Module):
         # ts N V L C
         all_res = torch.stack(all_res)
 
-        # ts N V L C -> N V C ts L -> N V C tsL
-        all_res = all_res.permute(1, 2, 4, 0, 3)
-        all_res = all_res.reshape(-1, self.num_nodes, self.d_model, self.mask_size * self.input_len)
-
-        # N V C Lo
-        all_res = self.linear(all_res)
-
-        # N V Lout C
-        all_res = all_res.permute(0, 1, 3, 2)
+        # ts N V L C -> N V L ts C -> N V L t s C
+        all_res = all_res.permute(1, 2, 3, 0, 4)
+        all_res = all_res.reshape(-1, self.num_nodes, self.input_len, self.tk, self.sk, self.d_model)
         return all_res
 
 
@@ -347,9 +340,11 @@ class CorrelationEncoder(nn.Module):
         #                                     n_heads=n_heads, num_nodes=num_nodes, input_len=input_len,
         #                                     output_len=output_len)
 
-        self.freq_attention = FreqSetAttention(tk=tk, sk=sk, d_model=d_encoder, d_ff=d_encoder_ff, dropout=dropout,
+        self.freq_attention = FreqSetAttention(tk=tk, sk=sk, d_model=d_model, d_ff=d_model, dropout=dropout,
                                                n_heads=n_heads, num_nodes=num_nodes, input_len=input_len,
                                                output_len=output_len, only_1=only_1)
+
+        self.output_layer = nn.Linear(input_len * sk * tk, output_len)
 
     def forward(self, x, supports):
         # # x: tk*sk N V Vd L -> tk sk N V Vd L -> N V L tk sk Vd
@@ -360,6 +355,8 @@ class CorrelationEncoder(nn.Module):
 
         # x: N V L tk sk C
         x = x + self.position_embedding  # add for causal transformer
+
+        x = self.freq_attention(x)
 
         skip = torch.zeros_like(x)
 
@@ -384,11 +381,16 @@ class CorrelationEncoder(nn.Module):
         x = F.relu(self.mlp(x))
         output = self.output(x)  # N tk*sk*C V L
 
+        # N V L T S C
         output = output.permute(0, 2, 3, 1).reshape(-1, self.num_nodes, self.input_len, self.tk, self.sk, self.d_out)
 
         # output, freq_attn: N V Lo C
-        freq_attn = self.freq_attention(output)
-        return freq_attn
+        # freq_attn = self.freq_attention(output)
+        # N V C TSL -> N V C L -> N V L C
+        output = output.permute(0, 1, 5, 2, 3, 4)\
+                       .reshape(-1, self.num_nodes, self.d_out, self.tk * self.sk * self.input_len)
+        output = self.output_layer(output)
+        return output.transpose(-1, -2)
 
 
 def calc_sym(adj):
