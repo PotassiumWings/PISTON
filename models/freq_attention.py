@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import math
+import logging
 import torch.nn.functional as F
 
 
@@ -177,6 +178,127 @@ class FreqAttention(nn.Module):
         return x
 
 
+class FreqSetDPPAttention(nn.Module):
+    def __init__(self, sk, tk, input_len, d_model, num_nodes, dropout):
+        super(FreqSetDPPAttention, self).__init__()
+        self.num_nodes = num_nodes
+        self.d_model = d_model
+        self.sk = sk
+        self.tk = tk
+        self.nc = self.sk * self.tk  # num_components
+        self.d_attn = d_model
+        self.d_ff = d_model
+        self.input_len = input_len
+        self.wq = nn.Parameter(torch.randn(self.d_model, self.d_attn),
+                               requires_grad=True)
+        self.wk = nn.Parameter(torch.randn(self.d_model, self.d_attn * self.d_attn),
+                               requires_grad=True)
+        self.wv = nn.Parameter(torch.randn(self.d_model, self.d_model), requires_grad=True)
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = nn.LayerNorm(d_model)
+        self.ff = nn.Sequential(nn.Linear(d_model, self.d_ff),
+                                nn.GELU(),
+                                nn.Dropout(dropout),
+                                nn.Linear(self.d_ff, d_model))
+
+    def forward(self, x):
+        residual = x
+        batch_size = x.shape[0]
+
+        # x: N V L t s C -> t s N C V L
+        x = torch.einsum('nvltsc->ntsvlc', x)
+        # N ts VL C
+        x = x.reshape(-1, self.tk * self.sk, self.input_len * self.num_nodes, self.d_model)
+        # N ts C
+        x_mean = x.mean(-2)
+
+        # q: N ts C(d_attn)
+        q = x_mean @ self.wq
+        # k: N ts C'^2 -> N ts C' C'
+        k = (x_mean @ self.wk).view(-1, self.nc, self.d_attn, self.d_attn)
+        # N ts C'
+        kt = k.mean(-1)
+        # N tsC' C'
+        k = k.view(-1, self.nc * self.d_attn, self.d_attn)
+        # v: N ts V L C'
+        v = x @ self.wv
+
+        # N ts C' * N C' tsC' -> N ts tsC' -> N ts ts C'
+        b = (q @ k.transpose(-1, -2)).view(-1, self.nc, self.nc, self.d_attn)
+
+        # N ts ts 1
+        r = b.norm(dim=-1, p=2, keepdim=True)
+        # N ts ts C'
+        f = b / r
+
+        # N ts ts ts, 单位向量点积 [-1, 1]
+        s = f @ f.transpose(-2, -1)
+        # [-1, 1] -> [0, 1]
+        s = (s + 1) / 2
+        # Nts ts ts
+        s = s.reshape(-1, self.nc, self.nc)
+        r = r.reshape(-1, self.nc)
+
+        res = []
+        for ind in range(batch_size * self.nc):
+            batch_ind = ind // self.nc
+            node_ind = ind % self.nc
+
+            l = s[ind]
+            rs = r[ind]
+            diag = torch.diag(l)  # store d^2
+
+            # exclude node_ind
+            l[node_ind] -= l[node_ind]
+            l[:, node_ind] = l[:, node_ind]
+            diag[node_ind] = -1e20
+
+            j = torch.argmax(diag + rs)  # argmax log(det L_S+{j}) - log(det L_S)
+            yg = [int(j.cpu().numpy())]
+            c = torch.zeros((self.nc + 1, self.nc)).to(x.device)
+            z_all = list(range(0, node_ind)) + list(range(node_ind + 1, self.nc))
+            # import pdb
+            # pdb.set_trace()
+            iter_ind = 1
+            while iter_ind < self.nc:
+                z_y = set(z_all).difference(set(yg))
+                for i in z_y:
+                    e = (l[j][i] - c[:iter_ind, j].dot(c[:iter_ind, i])) / torch.sqrt(diag[j])
+                    c[iter_ind, i] = e
+                    diag[i] -= e * e
+                diag[j] = -1e20
+                j = torch.argmax(diag + rs)
+                if diag[j] + rs[j] < 1e-6:
+                    break
+                yg.append(int(j.cpu().numpy()))
+                iter_ind += 1
+
+            s_exp = 0
+            s_v = 0
+            logging.info(yg)
+            for i in yg:
+                # C' * C' -> 1
+                val = torch.exp(q[batch_ind][node_ind] @ kt[batch_ind][i])
+                s_exp += val
+                s_v += val * v[batch_ind][i]  # V L C'
+            res.append(s_v / s_exp)
+
+        # Nts V L C -> N t s V L C' -> N V L t s C
+        output = torch.stack(res).view(-1, self.tk, self.sk, self.num_nodes, self.input_len, self.d_attn)\
+            .permute(0, 3, 4, 1, 2, 5)
+
+        result = output + residual
+        result = self.layer_norm(result)
+
+        # Feed-Forward
+        ff_res = self.ff(result)
+
+        # Add & Norm
+        result = result + self.dropout(ff_res)
+        result = self.layer_norm(result)
+        return result
+
+
 class FreqSetAttention(nn.Module):
     def __init__(self, tk, sk, d_model, d_ff, n_heads, num_nodes, input_len, dropout, output_len, only_1):
         super(FreqSetAttention, self).__init__()
@@ -340,9 +462,12 @@ class CorrelationEncoder(nn.Module):
         #                                     n_heads=n_heads, num_nodes=num_nodes, input_len=input_len,
         #                                     output_len=output_len)
 
-        self.freq_attention = FreqSetAttention(tk=tk, sk=sk, d_model=d_model, d_ff=d_model, dropout=dropout,
-                                               n_heads=n_heads, num_nodes=num_nodes, input_len=input_len,
-                                               output_len=output_len, only_1=only_1)
+        # self.freq_attention = FreqSetAttention(tk=tk, sk=sk, d_model=d_model, d_ff=d_model, dropout=dropout,
+        #                                        n_heads=n_heads, num_nodes=num_nodes, input_len=input_len,
+        #                                        output_len=output_len, only_1=only_1)
+
+        self.freq_attention = FreqSetDPPAttention(sk=sk, tk=tk, input_len=input_len, d_model=d_model,
+                                                  num_nodes=num_nodes, dropout=dropout)
 
         self.output_layer = nn.Linear(input_len * sk * tk, output_len)
 
