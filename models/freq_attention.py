@@ -200,10 +200,15 @@ class FreqSetDPPAttention(nn.Module):
                                 nn.GELU(),
                                 nn.Dropout(dropout),
                                 nn.Linear(self.d_ff, d_model))
+        # self.cnt = 0
 
     def forward(self, x):
         residual = x
         batch_size = x.shape[0]
+        # self.cnt += 1
+        # if self.cnt == 18:
+        #     import pdb
+        #     pdb.set_trace()
 
         # x: N V L t s C -> t s N C V L
         x = torch.einsum('nvltsc->ntsvlc', x)
@@ -220,7 +225,7 @@ class FreqSetDPPAttention(nn.Module):
         kt = k.mean(-1)
         # N tsC' C'
         k = k.view(-1, self.nc * self.d_attn, self.d_attn)
-        # v: N ts V L C'
+        # v: N ts VL C'
         v = x @ self.wv
 
         # N ts C' * N C' tsC' -> N ts tsC' -> N ts ts C'
@@ -244,16 +249,16 @@ class FreqSetDPPAttention(nn.Module):
             batch_ind = ind // self.nc
             node_ind = ind % self.nc
 
-            l = s[ind]
+            l = s[ind].clone()
             rs = r[ind]
             diag = torch.diag(l)  # store d^2
 
             # exclude node_ind
             l[node_ind] -= l[node_ind]
-            l[:, node_ind] = l[:, node_ind]
+            l[:, node_ind] -= l[:, node_ind]
             diag[node_ind] = -1e20
 
-            j = torch.argmax(diag + rs)  # argmax log(det L_S+{j}) - log(det L_S)
+            j = torch.argmax(diag * rs)  # argmax log(det L_S+{j}) - log(det L_S)
             yg = [int(j.cpu().numpy())]
             c = torch.zeros((self.nc + 1, self.nc)).to(x.device)
             z_all = list(range(0, node_ind)) + list(range(node_ind + 1, self.nc))
@@ -267,27 +272,38 @@ class FreqSetDPPAttention(nn.Module):
                     c[iter_ind, i] = e
                     diag[i] -= e * e
                 diag[j] = -1e20
-                j = torch.argmax(diag + rs)
-                if diag[j] + rs[j] < 1e-6:
+                j = torch.argmax(diag * rs)
+                if diag[j] * rs[j] < 1:
                     break
                 yg.append(int(j.cpu().numpy()))
                 iter_ind += 1
 
-            s_exp = 0
-            s_v = 0
-            logging.info(yg)
+            if len(yg) != self.nc - 1:
+                logging.info(f"finally! {yg}")
+            weights = []
+            vals = []
             for i in yg:
                 # C' * C' -> 1
-                val = torch.exp(q[batch_ind][node_ind] @ kt[batch_ind][i])
-                s_exp += val
-                s_v += val * v[batch_ind][i]  # V L C'
-            res.append(s_v / s_exp)
+                val = q[batch_ind][node_ind] @ kt[batch_ind][i]
+                vals.append(v[batch_ind][i])
+                weights.append(val)
+            # |S| 1
+            # import pdb
+            # pdb.set_trace()
+            weights = torch.softmax(torch.stack(weights).squeeze(-1), dim=0)
+            # |S| VL C' -> VL C' |S|
+            vals = torch.stack(vals).permute(1, 2, 0)
+
+            res.append(vals @ weights)
 
         # Nts V L C -> N t s V L C' -> N V L t s C
         output = torch.stack(res).view(-1, self.tk, self.sk, self.num_nodes, self.input_len, self.d_attn)\
             .permute(0, 3, 4, 1, 2, 5)
 
         result = output + residual
+        if result.isnan().any():
+            import pdb
+            pdb.set_trace()
         result = self.layer_norm(result)
 
         # Feed-Forward
