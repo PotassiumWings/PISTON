@@ -68,6 +68,9 @@ class Trainer:
                              # f"loss: {round(loss.item(), 4)} {round(loss)}, "
                              f"step: {self.should_step} "
                              f"eta: {self.eta}")
+                # if self.current_num % self.config.show_period * 30 == 0:
+                #     torch.cuda.empty_cache()
+                #     logging.info("Empty cache.")
 
                 if self.current_num % self.config.show_period == 0:
                     # evaluate

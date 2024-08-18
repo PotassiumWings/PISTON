@@ -249,34 +249,35 @@ class FreqSetDPPAttention(nn.Module):
             batch_ind = ind // self.nc
             node_ind = ind % self.nc
 
-            l = s[ind].clone()
-            rs = r[ind]
-            diag = torch.diag(l)  # store d^2
+            with torch.no_grad():
+                l = s[ind].clone()
+                rs = r[ind]
+                diag = torch.diag(l)  # store d^2
 
-            # exclude node_ind
-            l[node_ind] -= l[node_ind]
-            l[:, node_ind] -= l[:, node_ind]
-            diag[node_ind] = -1e20
+                # exclude node_ind
+                l[node_ind] -= l[node_ind]
+                l[:, node_ind] -= l[:, node_ind]
+                diag[node_ind] = -1e20
 
-            j = torch.argmax(diag * rs)  # argmax log(det L_S+{j}) - log(det L_S)
-            yg = [int(j.cpu().numpy())]
-            c = torch.zeros((self.nc + 1, self.nc)).to(x.device)
-            z_all = list(range(0, node_ind)) + list(range(node_ind + 1, self.nc))
-            # import pdb
-            # pdb.set_trace()
-            iter_ind = 1
-            while iter_ind < self.nc:
-                z_y = set(z_all).difference(set(yg))
-                for i in z_y:
-                    e = (l[j][i] - c[:iter_ind, j].dot(c[:iter_ind, i])) / torch.sqrt(diag[j])
-                    c[iter_ind, i] = e
-                    diag[i] -= e * e
-                diag[j] = -1e20
-                j = torch.argmax(diag * rs)
-                if diag[j] * rs[j] < 1:
-                    break
-                yg.append(int(j.cpu().numpy()))
-                iter_ind += 1
+                j = torch.argmax(diag * rs)  # argmax log(det L_S+{j}) - log(det L_S)
+                yg = [int(j.cpu().numpy())]
+                c = torch.zeros((self.nc + 1, self.nc)).to(x.device)
+                z_all = list(range(0, node_ind)) + list(range(node_ind + 1, self.nc))
+                # import pdb
+                # pdb.set_trace()
+                iter_ind = 1
+                while iter_ind < self.nc:
+                    z_y = set(z_all).difference(set(yg))
+                    for i in z_y:
+                        e = (l[j][i] - c[:iter_ind, j].dot(c[:iter_ind, i])) / torch.sqrt(diag[j])
+                        c[iter_ind, i] = e
+                        diag[i] -= e * e
+                    diag[j] = -1e20
+                    j = torch.argmax(diag * rs)
+                    if diag[j] * rs[j] < 1:
+                        break
+                    yg.append(int(j.cpu().numpy()))
+                    iter_ind += 1
 
             if len(yg) != self.nc - 1:
                 logging.info(f"finally! {yg}")
@@ -301,9 +302,6 @@ class FreqSetDPPAttention(nn.Module):
             .permute(0, 3, 4, 1, 2, 5)
 
         result = output + residual
-        if result.isnan().any():
-            import pdb
-            pdb.set_trace()
         result = self.layer_norm(result)
 
         # Feed-Forward
