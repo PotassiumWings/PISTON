@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 import logging
+from queue import PriorityQueue
 import torch.nn.functional as F
 
 
@@ -178,10 +179,44 @@ class FreqAttention(nn.Module):
         return x
 
 
+class AugmentUnit():
+    def __init__(self, bitmap, log_det, c, diag, max_state, nc, l, r):
+        self.bitmap = bitmap
+        self.log_det = log_det
+        self.c = c
+        self.diag = diag
+
+        self.max_state = max_state
+        self.l = l
+        self.nc = nc
+        self.r = r
+
+    def __lt__(self, other):
+        return self.log_det > other.log_det
+
+    def update(self, j):
+        bitmap_update = self.max_state ^ self.bitmap
+
+        def convert_to_list(bitmap):
+            return [i for i in range(self.nc) if bitmap & (1 << i)]
+
+        def get_iter_ind(bitmap):
+            return len(convert_to_list(bitmap))
+
+        iter_ind = get_iter_ind(self.bitmap)
+        for i in convert_to_list(bitmap_update):
+            e = (self.l[j][i] - self.c[:iter_ind, j].dot(self.c[:iter_ind, i])) / torch.sqrt(self.diag[j])
+            self.c[iter_ind, i] = e
+            self.diag[i] -= e * e
+        self.log_det += torch.log(self.diag[j]) + torch.log(self.r[j])
+        self.diag[j] = -1e20
+
+
 class FreqSetDPPAttention(nn.Module):
-    def __init__(self, sk, tk, input_len, d_model, num_nodes, dropout):
+    def __init__(self, sk, tk, input_len, d_model, num_nodes, dropout, num_subsets):
         super(FreqSetDPPAttention, self).__init__()
         self.num_nodes = num_nodes
+        self.num_subsets = num_subsets
         self.d_model = d_model
         self.sk = sk
         self.tk = tk
@@ -244,6 +279,9 @@ class FreqSetDPPAttention(nn.Module):
         s = s.reshape(-1, self.nc, self.nc)
         r = r.reshape(-1, self.nc)
 
+        # alpha = 0.1 TODO: args
+        r = torch.pow(r, 0.2)
+
         res = []
         for ind in range(batch_size * self.nc):
             batch_ind = ind // self.nc
@@ -258,44 +296,70 @@ class FreqSetDPPAttention(nn.Module):
                 l[node_ind] -= l[node_ind]
                 l[:, node_ind] -= l[:, node_ind]
                 diag[node_ind] = -1e20
-
-                j = torch.argmax(diag * rs)  # argmax log(det L_S+{j}) - log(det L_S)
-                yg = [int(j.cpu().numpy())]
                 c = torch.zeros((self.nc + 1, self.nc)).to(x.device)
-                z_all = list(range(0, node_ind)) + list(range(node_ind + 1, self.nc))
-                # import pdb
-                # pdb.set_trace()
-                iter_ind = 1
-                while iter_ind < self.nc:
-                    z_y = set(z_all).difference(set(yg))
-                    for i in z_y:
-                        e = (l[j][i] - c[:iter_ind, j].dot(c[:iter_ind, i])) / torch.sqrt(diag[j])
-                        c[iter_ind, i] = e
-                        diag[i] -= e * e
-                    diag[j] = -1e20
-                    j = torch.argmax(diag * rs)
-                    if diag[j] * rs[j] < 1:
-                        break
-                    yg.append(int(j.cpu().numpy()))
-                    iter_ind += 1
 
-            if len(yg) != self.nc - 1:
-                logging.info(f"finally! {yg}")
-            weights = []
-            vals = []
-            for i in yg:
-                # C' * C' -> 1
-                val = q[batch_ind][node_ind] @ kt[batch_ind][i]
-                vals.append(v[batch_ind][i])
-                weights.append(val)
-            # |S| 1
-            # import pdb
-            # pdb.set_trace()
-            weights = torch.softmax(torch.stack(weights).squeeze(-1), dim=0)
-            # |S| VL C' -> VL C' |S|
-            vals = torch.stack(vals).permute(1, 2, 0)
+                state_set = set()
+                max_state = ((1 << self.nc) - 1) ^ (1 << node_ind)
+                unit_queue = PriorityQueue()   # 小根堆，min logdet
+                init_unit = AugmentUnit(bitmap=0, log_det=0, c=c, diag=diag, max_state=max_state, nc=self.nc, l=l, r=rs)
+                state_set.add(0)
+                unit_queue.put((0, init_unit))
+                update_flag = True
 
-            res.append(vals @ weights)
+                while update_flag:
+                    update_flag = False
+                    new_queue = PriorityQueue()  # 大根堆，max logdet
+                    for _, unit in unit_queue.queue:
+                        bitmap = unit.bitmap
+                        log_det = unit.log_det
+                        c = unit.c
+                        diag = unit.diag
+
+                        js = torch.topk(diag * rs, self.num_subsets).indices.cpu().numpy()
+                        for j in js:
+                            new_bitmap = bitmap | (1 << j)
+                            if new_bitmap in state_set or diag[j] * rs[j] < 1:
+                                continue
+                            state_set.add(new_bitmap)
+                            new_unit = AugmentUnit(bitmap=new_bitmap, log_det=log_det,
+                                                   c=torch.clone(c), diag=torch.clone(diag),
+                                                   max_state=max_state, nc=self.nc, l=l, r=rs)
+
+                            new_unit.update(j)
+                            new_queue.put(new_unit)
+
+                    cnt = 0
+                    while cnt < self.num_subsets and not new_queue.empty():
+                        unit = new_queue.get()
+                        unit_queue.put((unit.log_det, unit))
+                        update_flag = True
+                        cnt += 1
+                        if unit_queue.qsize() > self.num_subsets:
+                            unit_queue.get()
+
+            u_res = 0
+            # subsets = ""
+            for _, unit in unit_queue.queue:
+                bitmap = unit.bitmap
+                log_det = unit.log_det
+                weights = []
+                vals = []
+                for i in range(self.nc):
+                    if bitmap & (1 << i):
+                        # subsets += str(i) + " "
+                        val = q[batch_ind][node_ind] @ kt[batch_ind][i]
+                        vals.append(v[batch_ind][i])
+                        weights.append(val)
+                # |S| 1
+                weights = torch.softmax(torch.stack(weights), dim=0)
+                # |S| VL C' -> VL C' |S|
+                vals = torch.stack(vals).permute(1, 2, 0)
+
+                u_res += (vals @ weights) * log_det
+                # subsets += ","
+            # logging.info(subsets)
+
+            res.append(u_res)
 
         # Nts V L C -> N t s V L C' -> N V L t s C
         output = torch.stack(res).view(-1, self.tk, self.sk, self.num_nodes, self.input_len, self.d_attn)\
@@ -437,7 +501,7 @@ class Normalization(nn.Module):
 
 class CorrelationEncoder(nn.Module):
     def __init__(self, input_len, output_len, num_nodes, tk, sk, layers, adp_emb, n_heads, d_out, d_model, d_ff,
-                 d_encoder, d_encoder_ff, dropout, support_len, order, only_1):
+                 d_encoder, d_encoder_ff, dropout, support_len, order, num_subsets):
         super(CorrelationEncoder, self).__init__()
         self.tk = tk
         self.sk = sk
@@ -481,7 +545,7 @@ class CorrelationEncoder(nn.Module):
         #                                        output_len=output_len, only_1=only_1)
 
         self.freq_attention = FreqSetDPPAttention(sk=sk, tk=tk, input_len=input_len, d_model=d_model,
-                                                  num_nodes=num_nodes, dropout=dropout)
+                                                  num_nodes=num_nodes, dropout=dropout, num_subsets=num_subsets)
 
         self.output_layer = nn.Linear(input_len * sk * tk, output_len)
 
